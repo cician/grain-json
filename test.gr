@@ -1,0 +1,55 @@
+import Float64 from "float64"
+import Option from "option"
+import List from "list"
+import Map from "map"
+import Json, { FormattingSettings } from "json"
+
+// Compiler for some reason says the fields of FormattingSettings are not public.
+let format = {
+	indentation: Json.IndentWithTab,
+	arrayFormat: Json.OneEntryPerLine,
+	lineEnding: Json.LineFeed,
+	finishWithNewLine: true,
+	escapeAllControlPoints: true,
+	escapeHTMLUnsafeSequences: true,
+	escapeNonASCII: true
+} : FormattingSettings
+
+let printSomething = () => {
+	let test = Json.JSONArray([
+		Json.JSONNull,
+		Json.JSONBoolean(true),
+		Json.JSONBoolean(false),
+		Json.JSONNumber(Float64.fromNumber(2)),
+		Json.JSONNumber(Float64.fromNumber(-2)),
+		Json.JSONNumber(Float64.fromNumber(-0)),
+		Json.JSONNumber(Float64.fromNumber(1E200)),
+		Json.JSONNumber(Float64.fromNumber(1E-200)),
+		// Json.JSONNumber(Float64.fromNumber(inf)),
+		Json.JSONString("🤘🏻 \u0008Hello\n\"wo</ \u007F \u0080 rld\"! 🤘🏻"),
+		Json.JSONArray([]),
+		Json.JSONArray([Json.JSONNull]),
+		Json.JSONArray([
+			Json.JSONNumber(Float64.fromNumber(1)),
+			Json.JSONNumber(Float64.fromNumber(2)),
+			Json.JSONNumber(Float64.fromNumber(3))
+		])
+	])
+
+	print("ugly:")
+	Json.printCompact(test)
+	print("")
+	print("pretty:")
+	Json.printPretty(test)
+	print("")
+	print("prettier:")
+	{
+		
+		Json.print(test, format)
+	}
+
+	
+
+}
+
+printSomething();

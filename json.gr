@@ -1,0 +1,328 @@
+import Option from "option"
+import List from "list"
+// import Map from "map"
+import Float64 from "float64"
+import Stubs from "stubs"
+import String from "string"
+import Char from "char"
+import Array from "array"
+// import LinkedHashMap from "linkedhashmap"
+
+// FIXME Maybe implement a specific data structure for associative arrays?
+// Ideally:
+// - Immutable
+// - Order preserving
+
+// record JSONAssociativeArrayList {
+// 	entries: List<NameValuePair<String, JSON>>
+// }
+
+export enum JSON {
+	JSONNull,
+	JSONBoolean(Bool),
+	JSONNumber(Float64),
+	JSONString(String),
+	JSONArray(List<JSON>),
+	// JSONObject(Map.Map<String,JSON>)
+	// JSONObject(LinkedHashMap.LinkedHashMap<String,JSON>)
+}
+
+export enum IndentationFormat {
+	NoIndentation,
+	IndentWithTab,
+	IndentWithSpaces(Number)
+}
+
+export enum ArrayFormat {
+	CompactEntries,
+	OneEntryPerLine
+}
+
+export enum LineEnding {
+	NoLineEnding,
+	LineFeed,
+	CarriageReturnLineFeed,
+	CarriageReturn
+}
+
+export record FormattingSettings {
+	indentation: IndentationFormat,
+	arrayFormat: ArrayFormat,
+	lineEnding: LineEnding,
+	finishWithNewLine: Bool,
+	escapeAllControlPoints: Bool,
+	escapeHTMLUnsafeSequences: Bool,
+	escapeNonASCII: Bool
+}
+
+// Compact formatting that minimizes the size of resulting JSON at cost of not being easily human readable.
+// Only performs minimal string escaping as required by the ECMA-404 standard, so the result needs to
+// be treated as proper unicode and is not safe to be transported in ASCII encoding.
+export let defaultCompactFormat =
+	() => {
+		indentation: NoIndentation,
+		arrayFormat: CompactEntries,
+		lineEnding: NoLineEnding,
+		finishWithNewLine: false,
+		escapeAllControlPoints: false,
+		escapeHTMLUnsafeSequences: false,
+		escapeNonASCII: false
+	} : FormattingSettings
+
+// Recommended human readable formatting.
+// Escapes all control points for the sake of clarity, but doesn't go the extra mile to escape additional
+// sequences or unicode characters.
+export let defaultPrettyFormat =
+	() => {
+		indentation: IndentWithSpaces(2),
+		arrayFormat: OneEntryPerLine,
+		lineEnding: LineFeed,
+		finishWithNewLine: true,
+		escapeAllControlPoints: true,
+		escapeHTMLUnsafeSequences: false,
+		escapeNonASCII: false
+	} : FormattingSettings
+
+// Compact and conservative formatting to maximize compatibility and embeddability of the resulting JSON.
+// Should be safe to copy and paste directly into HTML and to transported in plain ASCII.
+export let defaultCompactAndSafeFormat =
+	() => {
+		indentation: NoIndentation,
+		arrayFormat: CompactEntries,
+		lineEnding: NoLineEnding,
+		finishWithNewLine: false,
+		escapeAllControlPoints: true,
+		escapeHTMLUnsafeSequences: true,
+		escapeNonASCII: true
+	} : FormattingSettings
+
+// Pretty and conservative formatting to maximize compatibility and embeddability of the resulting JSON.
+// Should be safe to copy and paste directly into HTML and to transported in plain ASCII.
+export let defaultPrettyAndSafeFormat =
+	() => {
+		indentation: IndentWithSpaces(2),
+		arrayFormat: OneEntryPerLine,
+		lineEnding: LineFeed,
+		finishWithNewLine: true,
+		escapeAllControlPoints: true,
+		escapeHTMLUnsafeSequences: true,
+		escapeNonASCII: true
+	} : FormattingSettings
+
+let printIndentation = (indentation: IndentationFormat, emit, indentationLevel: Number) => {
+	match (indentation) {
+		IndentWithTab => {
+			let mut count = 0
+			while (count < indentationLevel) {
+				emit("\u0009")
+				count += 1;
+			}
+		},
+		IndentWithSpaces(spacesPerIndentation) => {
+			let mut count = 0
+			while (count < indentationLevel*spacesPerIndentation) {
+				emit("\u0020")
+				count += 1;
+			}
+		},
+		NoIndentation => void
+	}
+}
+
+let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
+	emit("\\u");
+	// 	// hhhh = Integer.toHexString(c);
+	// 	// w.write("0000", 0, 4 - hhhh.length());
+	// 	// w.write(hhhh);
+}
+
+let lineEndingToString = (lineEnding: LineEnding) => {
+	match (lineEnding) {
+		NoLineEnding => "",
+		LineFeed => "\n",
+		CarriageReturnLineFeed => "\r\n",
+		CarriageReturn => "\r"
+	}
+}
+
+// Escapes the provided string and emits the result char by char with the emit function.
+let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
+	// Escape the string.
+	// Probably a good candidate for low level optimization.
+	// Mostly to avoid allocating the char array.
+	// Also doesn't grain allow matching on numbers?
+	let chars = String.explode(s)
+	let mut i = 0
+	let len = Array.length(chars)
+	let mut prevChar = '\u0000';
+	let mut char = '\u0000';
+	while (i < len) {
+		char = chars[i];
+
+		match (char) {
+			'\u0008' => emit("\\b"), // backspace
+			'\u0009' => emit("\\t"), // tab
+			'\u000A' => emit("\\n"), // line feed
+			'\u000C' => emit("\\f"), // form feed
+			'\u000D' => emit("\\r"), // carriage return
+			'\u0022' => emit("\\\""), // quotation mark
+			'\u005C' => emit("\\\\"), // backslash or "Reverse Solidus"
+			//c => emit(toString(c))
+			c => {
+				let codePoint = Char.code(char);
+
+				/*
+				if (codePoint == 8) { // backspace
+					emit("\\b")
+				} else if (codePoint == 9) { // tab
+					emit("\\t")
+				} else if (codePoint == 10) { // line feed
+					emit("\\n")
+				} else if (codePoint == 12) { // form feed
+					emit("\\f")
+				} else if (codePoint == 13) { // carriage return
+					emit("\\r")
+				} else if (codePoint == 34) { // quotation mark
+					emit("\\\"")
+				} else if (codePoint == 92) { // backspace
+					emit("\\\\")
+				}
+				*/
+				
+				if (codePoint >= 0 && codePoint <= 31) {
+					// ASCII or "C0" control point group, except 127, handled separately.
+					// The ECMA-404 spec only requires to escape the control point codes 0-31,
+					// But it may be desirable to escape other control points or even everything
+					// other than printable ASCII characters for compatiblity, easier transport,
+					// embedding etc. Thus I've decided to expose options for this, but otherwise
+					// just a sane default would suffice.
+					emitEscapedUnicodeSequence(codePoint, emit)
+				} else if (codePoint >= 127 && codePoint <= 159 && format.escapeAllControlPoints) {
+					// ASCII control point 127 and unicode control point group C1 (128-159)
+					emitEscapedUnicodeSequence(codePoint, emit)
+
+					// There could be more control points or otherwise escape worthy codepoints,
+					// but covering that would be overkill. For everything outside of the ASCII
+					// range the user has to decide whether to escape all unicode codepoint or
+					// nothing, including the .
+				} else if (codePoint >= 128 && format.escapeNonASCII) {
+					// If the user chooses to do so, escape all non ASCII code points.
+					emitEscapedUnicodeSequence(codePoint, emit)
+				} else if (char == '/' && format.escapeHTMLUnsafeSequences) {
+					// Additionally many JSON libraries escape additional two character sequences for
+					// direct embedding into html for example. This is specifically to avoid emitting
+					// the sequence "</" like in "</script>".
+					// The lazy approach would be to just escape the slash (which can become "\\/",
+					// not necessarily "\u002F"). This more conservative approach only escapes it
+					// when needed.
+					if (prevChar == '<') {
+						emit("\\/")
+					} else {
+						// otherwise just emit the slash as-is
+						emit("/")
+					}
+				} else {
+					emit(toString(char))
+				}
+			}
+		}
+
+		i += 1;
+		prevChar = char;
+	}
+}
+
+// FIXME can't define explicit type for the emit parameter
+// or am I doing something wrong?
+let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: String, emit, indentationLevel: Number) => {
+	match (json) {
+		JSONNull => emit("null"),
+
+		// FIXME why does it sometimes require other times not? Seemingly at random.
+		// JSONBoolean(true) => emit("true"),
+		// JSONBoolean(false) => emit("false"),
+		
+		JSONBoolean(b) => emit(if (b) "true" else "false"),
+
+		// FIXME is Grain's printing of bools and numbers always compatible with JSON?
+		// Probably, but we probably want to customize a bit.
+		// For example to print natural numberso without ".0" for compactness sake.
+		// Maybe customizable? Node does it.
+		// FIXME does grain allow Inf and NaN?
+		// These are not supported JSON values.
+		// What to do with them?
+		JSONNumber(n) => emit(toString(n)),
+
+		JSONString(s) => {
+			emit("\"")
+			emitEscapedString(s, format, emit)
+			emit("\"")
+		},
+
+		JSONArray(elems) => {
+			match (format.arrayFormat) {
+				CompactEntries => {
+					emit("[")
+					// FIXME doest it always allocate the lambda?
+					List.forEachi(
+						(e, i) => {
+							if (i > 0)
+								emit(",")
+							emitJSONElement(e, format, lineEnding, emit, indentationLevel+1)
+						},
+						elems
+					)
+					emit("]")
+				},
+				OneEntryPerLine => {
+					match (elems) {
+						[] => {
+							emit("[]")
+						},
+						[e] => {
+							emit("[ ")
+							emitJSONElement(e, format, lineEnding, emit, indentationLevel+1)
+							emit(" ]")
+						},
+						elems => {
+							emit("[")
+							emit(lineEnding)
+							List.forEachi(
+								(e, i) => {
+									if (i > 0) {
+										emit(",")
+										emit(lineEnding)
+									}
+									printIndentation(format.indentation, emit, indentationLevel+1)
+									
+									emitJSONElement(e, format, lineEnding, emit, indentationLevel+1)
+								},
+								elems
+							)
+							emit(lineEnding)
+							printIndentation(format.indentation, emit, indentationLevel)
+							emit("]")
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+let rec emitJSON = (json: JSON, format: FormattingSettings, emit) => {
+	let lineEnding = lineEndingToString(format.lineEnding)
+
+	emitJSONElement(json, format, lineEnding, emit, 0)
+
+	if (format.finishWithNewLine)
+		emit(lineEnding)
+}
+
+export let print = (json: JSON, format: FormattingSettings) => {
+	emitJSON(json, format, Stubs.print_no_new_line)
+}
+
+export let printCompact = (json: JSON) => print(json, defaultCompactFormat())
+
+export let printPretty = (json: JSON) => print(json, defaultPrettyFormat())
