@@ -17,11 +17,10 @@ For now you need to have Grain already installed and on the path. Then just laun
 		For now just using grain's toString of Float64, which works,
 		but may not be a good idea.
 	- [ ] String escaping
-		- Unicode hex sequence escaping
-		- Simplify and/or optimize
+		[x] Unicode hex sequence escaping
+		[ ] Simplify and/or optimize
 	- [x] Arrays
-	- [ ] Objects
-		I need an adequate data structure. For now I could make one from a combination of a Map and a List or just accept a Map and live with semi-random property ordering, but even there I'm blocked by this bug: https://github.com/grain-lang/grain/issues/665.
+	- [x] Objects
 	- [ ] toString
 		For now I'm just doing only printing to the standard output.
 		Need a string buffer or something similar.

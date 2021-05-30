@@ -1,31 +1,24 @@
-import Option from "option"
 import List from "list"
-// import Map from "map"
 import Float64 from "float64"
 import { print_no_new_line, numberToHex, int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
 import Int32 from "int32"
-// import LinkedHashMap from "linkedhashmap"
-
-// FIXME Maybe implement a specific data structure for associative arrays?
-// Ideally:
-// - Immutable
-// - Order preserving
-
-// record JSONAssociativeArrayList {
-// 	entries: List<NameValuePair<String, JSON>>
-// }
 
 export enum JSON {
 	JSONNull,
 	JSONBoolean(Bool),
 	JSONNumber(Float64),
 	JSONString(String),
+	// Here I've chosen to use a List and not an array as a conscious trad of performance for immutability.
+	// I'd love to use a more advanced persistent collection instead, but there currently aren't any in Grain.
 	JSONArray(List<JSON>),
-	// JSONObject(Map.Map<String,JSON>)
-	// JSONObject(LinkedHashMap.LinkedHashMap<String,JSON>)
+	// Note that JSONObject here is deliberately defined as a simple list of key value pair tuples as opposed
+	// to for example a Map in order to accomodate the fact that the ECMA-404 standard doesn't prohibit
+	// duplicate names in Objects. Such JSON should be representable by the JSON data structure for lossless
+	// processing. This also vastly simplifies implementation and has the benefit of List's immutability.
+	JSONObject(List<(String,JSON)>)
 }
 
 export enum IndentationFormat {
@@ -35,8 +28,13 @@ export enum IndentationFormat {
 }
 
 export enum ArrayFormat {
-	CompactEntries,
-	OneEntryPerLine
+	CompactArrayEntries,
+	OneArrayEntryPerLine
+}
+
+export enum ObjectFormat {
+	CompactObjectEntries,
+	OneObjectEntryPerLine
 }
 
 export enum LineEnding {
@@ -49,6 +47,7 @@ export enum LineEnding {
 export record FormattingSettings {
 	indentation: IndentationFormat,
 	arrayFormat: ArrayFormat,
+	objectFormat: ObjectFormat,
 	lineEnding: LineEnding,
 	finishWithNewLine: Bool,
 	escapeAllControlPoints: Bool,
@@ -62,7 +61,8 @@ export record FormattingSettings {
 export let defaultCompactFormat =
 	() => {
 		indentation: NoIndentation,
-		arrayFormat: CompactEntries,
+		arrayFormat: CompactArrayEntries,
+		objectFormat: CompactObjectEntries,
 		lineEnding: NoLineEnding,
 		finishWithNewLine: false,
 		escapeAllControlPoints: false,
@@ -76,7 +76,8 @@ export let defaultCompactFormat =
 export let defaultPrettyFormat =
 	() => {
 		indentation: IndentWithSpaces(2),
-		arrayFormat: OneEntryPerLine,
+		arrayFormat: OneArrayEntryPerLine,
+		objectFormat: OneObjectEntryPerLine,
 		lineEnding: LineFeed,
 		finishWithNewLine: true,
 		escapeAllControlPoints: true,
@@ -89,7 +90,8 @@ export let defaultPrettyFormat =
 export let defaultCompactAndSafeFormat =
 	() => {
 		indentation: NoIndentation,
-		arrayFormat: CompactEntries,
+		arrayFormat: CompactArrayEntries,
+		objectFormat: CompactObjectEntries,
 		lineEnding: NoLineEnding,
 		finishWithNewLine: false,
 		escapeAllControlPoints: true,
@@ -102,7 +104,8 @@ export let defaultCompactAndSafeFormat =
 export let defaultPrettyAndSafeFormat =
 	() => {
 		indentation: IndentWithSpaces(2),
-		arrayFormat: OneEntryPerLine,
+		arrayFormat: OneArrayEntryPerLine,
+		objectFormat: OneObjectEntryPerLine,
 		lineEnding: LineFeed,
 		finishWithNewLine: true,
 		escapeAllControlPoints: true,
@@ -130,7 +133,6 @@ let printIndentation = (indentation: IndentationFormat, emit, indentationLevel: 
 	}
 }
 
-
 let emitUTF16EscapeSequence = (codePoint: Int32, emit) => {
 	// if (codePoint < 0n || codePoint > 0xFFFFn)
 	// 	throw InvalidArgument("emitUTF16EscapeSequence() codePoint must be between 0 and 0xFFFF")
@@ -144,8 +146,6 @@ let emitUTF16EscapeSequence = (codePoint: Int32, emit) => {
 	}
 	emit(hex);
 }
-
-
 
 let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
 	// See the String section in the ECMA-404 doc.
@@ -258,6 +258,12 @@ let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
 	}
 }
 
+let emitEscapedQuotedString = (s: String, format: FormattingSettings, emit) => {
+	emit("\"")
+	emitEscapedString(s, format, emit)
+	emit("\"")
+}
+
 // FIXME can't define explicit type for the emit parameter
 // or am I doing something wrong?
 let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: String, emit, indentationLevel: Number) => {
@@ -279,15 +285,11 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: S
 		// What to do with them?
 		JSONNumber(n) => emit(toString(n)),
 
-		JSONString(s) => {
-			emit("\"")
-			emitEscapedString(s, format, emit)
-			emit("\"")
-		},
+		JSONString(s) => emitEscapedQuotedString(s, format, emit),
 
 		JSONArray(elems) => {
 			match (format.arrayFormat) {
-				CompactEntries => {
+				CompactArrayEntries => {
 					emit("[")
 					// FIXME doest it always allocate the lambda?
 					List.forEachi(
@@ -300,7 +302,7 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: S
 					)
 					emit("]")
 				},
-				OneEntryPerLine => {
+				OneArrayEntryPerLine => {
 					match (elems) {
 						[] => {
 							emit("[]")
@@ -328,6 +330,61 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: S
 							emit(lineEnding)
 							printIndentation(format.indentation, emit, indentationLevel)
 							emit("]")
+						}
+					}
+				}
+			}
+		},
+
+		JSONObject(entries) => {
+			match (format.objectFormat) {
+				CompactObjectEntries => {
+					emit("{")
+					List.forEachi(
+						((key, value), i) => {
+							if (i > 0)
+								emit(",")
+
+							emitEscapedQuotedString(key, format, emit)
+							emit(":")
+							emitJSONElement(value, format, lineEnding, emit, indentationLevel+1)
+						},
+						entries
+					)
+					emit("}")
+				},
+				OneObjectEntryPerLine => {
+					match (entries) {
+						[] => {
+							emit("{}")
+						},
+						[(key, value)] => {
+							emit("{ ")
+							emitEscapedQuotedString(key, format, emit)
+							emit(": ")
+							emitJSONElement(value, format, lineEnding, emit, indentationLevel+1)
+							emit(" }")
+						},
+						entries => {
+							emit("{")
+							emit(lineEnding)
+							List.forEachi(
+								((key, value), i) => {
+									if (i > 0) {
+										emit(",")
+										emit(lineEnding)
+									}
+									printIndentation(format.indentation, emit, indentationLevel+1)
+									
+									emitEscapedQuotedString(key, format, emit)
+									emit(": ")
+									emitJSONElement(value, format, lineEnding, emit, indentationLevel+1)
+								},
+								entries
+							)
+							emit(lineEnding)
+							printIndentation(format.indentation, emit, indentationLevel)
+							emit("}")
 						}
 					}
 				}

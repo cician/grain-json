@@ -1,21 +1,10 @@
 import Float64 from "float64"
-import Option from "option"
-import List from "list"
-import Map from "map"
-import Json, { FormattingSettings } from "json"
-
-// Compiler for some reason says the fields of FormattingSettings are not public.
-let format = {
-	indentation: Json.IndentWithTab,
-	arrayFormat: Json.OneEntryPerLine,
-	lineEnding: Json.LineFeed,
-	finishWithNewLine: true,
-	escapeAllControlPoints: true,
-	escapeHTMLUnsafeSequences: true,
-	escapeNonASCII: true
-} : FormattingSettings
+import Json from "json"
 
 let printSomething = () => {
+	print("simple object: ")
+	Json.printPretty(Json.JSONObject([("hello", Json.JSONString("world!"))]))
+
 	let test = Json.JSONArray([
 		Json.JSONNull,
 		Json.JSONBoolean(true),
@@ -26,14 +15,22 @@ let printSomething = () => {
 		Json.JSONNumber(Float64.fromNumber(1E200)),
 		Json.JSONNumber(Float64.fromNumber(1E-200)),
 		// Json.JSONNumber(Float64.fromNumber(inf)),
-		Json.JSONString("🤘🏻 \u0008Hello\n\"wo</ \u007F \u0080 rld\"! 🤘🏻"),
+		Json.JSONString("🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿 Hello\n\"wo</ \u007F \u0080 rld\"! 🤘🏻"),
 		Json.JSONArray([]),
 		Json.JSONArray([Json.JSONNull]),
 		Json.JSONArray([
 			Json.JSONNumber(Float64.fromNumber(1)),
 			Json.JSONNumber(Float64.fromNumber(2)),
 			Json.JSONNumber(Float64.fromNumber(3))
-		])
+		]),
+		Json.JSONObject([
+			("pinco", Json.JSONString("pallino")),
+			("pippo", Json.JSONNumber(Float64.fromNumber(4543)))
+		]),
+		Json.JSONObject([
+			("just", Json.JSONString("one"))
+		]),
+		Json.JSONObject([])
 	])
 
 	print("ugly:")
@@ -43,13 +40,17 @@ let printSomething = () => {
 	Json.printPretty(test)
 	print("")
 	print("prettier:")
-	{
-		
-		Json.print(test, format)
-	}
-
-	
-
+	// Compiler for some reason says the fields of FormattingSettings are not public.
+	Json.print(test, {
+		indentation: Json.IndentWithTab,
+		arrayFormat: Json.OneArrayEntryPerLine,
+		objectFormat: Json.OneObjectEntryPerLine,
+		lineEnding: Json.LineFeed,
+		finishWithNewLine: true,
+		escapeAllControlPoints: true,
+		escapeHTMLUnsafeSequences: true,
+		escapeNonASCII: true
+	})
 }
 
 printSomething();
