@@ -2,7 +2,7 @@ import Option from "option"
 import List from "list"
 // import Map from "map"
 import Float64 from "float64"
-import { print_no_new_line, numberToHex, int32ToHex } from "stubs"
+import { print_no_new_line, numberToHex, int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
@@ -145,9 +145,7 @@ let emitUTF16EscapeSequence = (codePoint: Int32, emit) => {
 	emit(hex);
 }
 
-let _MIN_LOW_SURROGATE = 0xDC00
-let _MIN_HIGH_SURROGATE = 0xD800
-let _MIN_SUPPLEMENTARY_CODE_POINT = 0x010000
+
 
 let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
 	// See the String section in the ECMA-404 doc.
@@ -158,9 +156,7 @@ let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
 	if (codePoint <= 0xFFFF) {
 		emitUTF16EscapeSequence(i, emit)
 	} else {
-		let lowSurrogate = ((codePoint & 0x3ff) + _MIN_LOW_SURROGATE)
-		let highSurrogate = ((codePoint >>> 10) + (_MIN_HIGH_SURROGATE - (_MIN_SUPPLEMENTARY_CODE_POINT >>> 10)))
-
+		let (lowSurrogate, highSurrogate) = unicodeCodepointToSurrogatePair(codePoint)
 		emitUTF16EscapeSequence(Int32.fromNumber(highSurrogate), emit)
 		emitUTF16EscapeSequence(Int32.fromNumber(lowSurrogate), emit)
 	}

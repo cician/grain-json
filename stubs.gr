@@ -1,41 +1,28 @@
-/* grainc-flags --no-pervasives */
+/*
+This file contains stubs for functions that I think need to be part of Grain's standard library.
+*/
 
-import WasmI32, {
-  add as (+),
-  sub as (-),
-  mul as (*),
-  divS as (/),
-  shl as (<<),
-  shrS as (>>),
-  and as (&),
-  or as (|),
-  eq as (==),
-  ne as (!=),
-  geS as (>=),
-  gtS as (>),
-  leS as (<=),
-  ltS as (<)
-} from "runtime/unsafe/wasmi32"
+import WasmI32 from "runtime/unsafe/wasmi32"
 import Memory from "runtime/unsafe/memory"
 import String from "runtime/string"
-
-import foreign wasm fd_write: (WasmI32, WasmI32, WasmI32, WasmI32) -> WasmI32 from "wasi_snapshot_preview1"
+import Int32 from "int32"
+import NumberUtils from "runtime/numberUtils"
+import Wasi from "runtime/wasi"
 
 @disableGC
 export let print_no_new_line = (value) => {
-  let ptr = WasmI32.fromGrain(String.toString(value))
-  let buf = Memory.malloc(37n)
-  let iov = buf
-  let written = buf + 32n
-  WasmI32.store(iov, ptr + 8n, 0n)
-  WasmI32.store(iov, WasmI32.load(ptr, 4n), 4n)
-  WasmI32.store(iov, 1n, 8n)
-  fd_write(1n, iov, 1n, written) // originally the 3rd param is 2n in String.print. What does it do?
-  Memory.free(buf)
+	// This i based on String.print.
+	// Warning: I don't really know 100% what I'm doing here, but it works for me.
+	let ptr = WasmI32.fromGrain(String.toString(value))
+	let buf = Memory.malloc(37n)
+	let iov = buf
+	let written = WasmI32.add(buf, 32n)
+	WasmI32.store(iov, WasmI32.add(ptr, 8n), 0n)
+	WasmI32.store(iov, WasmI32.load(ptr, 4n), 4n)
+	WasmI32.store(iov, 1n, 8n)
+	Wasi.fd_write(1n, iov, 1n, written) // originally the 3rd param is 2n in String.print. What does it do?
+	Memory.free(buf)
 }
-
-import Int32 from "int32"
-import NumberUtils from "runtime/numberUtils"
 
 @disableGC
 export let numberToHex = (n: Number) => {
@@ -52,4 +39,16 @@ export let int32ToHex = (i: Int32) => {
 	let int = WasmI32.load(ptr, 8n)
 	let hex = NumberUtils.itoa32(int, 16n)
 	hex
+}
+
+export let unicodeCodepointToSurrogatePair = (codePoint: Number) => {
+	// The content of this function is based on code from OpenJDK and thus subject to the GPL license (not LGPL).
+	// So it may be for the better if someone else reimplemented it scratch.
+	let _MIN_LOW_SURROGATE = 0xDC00
+	let _MIN_HIGH_SURROGATE = 0xD800
+	let _MIN_SUPPLEMENTARY_CODE_POINT = 0x010000
+
+	let lowSurrogate = ((codePoint & 0x3ff) + _MIN_LOW_SURROGATE)
+	let highSurrogate = ((codePoint >>> 10) + (_MIN_HIGH_SURROGATE - (_MIN_SUPPLEMENTARY_CODE_POINT >>> 10)))
+	(lowSurrogate,highSurrogate)
 }
