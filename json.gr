@@ -2,10 +2,11 @@ import Option from "option"
 import List from "list"
 // import Map from "map"
 import Float64 from "float64"
-import Stubs from "stubs"
+import { print_no_new_line, numberToHex, int32ToHex } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
+import Int32 from "int32"
 // import LinkedHashMap from "linkedhashmap"
 
 // FIXME Maybe implement a specific data structure for associative arrays?
@@ -129,11 +130,40 @@ let printIndentation = (indentation: IndentationFormat, emit, indentationLevel: 
 	}
 }
 
-let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
+
+let emitUTF16EscapeSequence = (codePoint: Int32, emit) => {
+	// if (codePoint < 0n || codePoint > 0xFFFFn)
+	// 	throw InvalidArgument("emitUTF16EscapeSequence() codePoint must be between 0 and 0xFFFF")
+
 	emit("\\u");
-	// 	// hhhh = Integer.toHexString(c);
-	// 	// w.write("0000", 0, 4 - hhhh.length());
-	// 	// w.write(hhhh);
+	let hex = int32ToHex(codePoint)
+	let mut len = String.length(hex)
+	while (len < 4) {
+		emit("0")
+		len += 1;
+	}
+	emit(hex);
+}
+
+let _MIN_LOW_SURROGATE = 0xDC00
+let _MIN_HIGH_SURROGATE = 0xD800
+let _MIN_SUPPLEMENTARY_CODE_POINT = 0x010000
+
+let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
+	// See the String section in the ECMA-404 doc.
+	// If the code point is "in the Basic Multilingual Plane", that is
+	// in range 0..65535. Greater values need to be split into two
+	// UTF-16 chunks.
+	let i = Int32.fromNumber(codePoint);
+	if (codePoint <= 0xFFFF) {
+		emitUTF16EscapeSequence(i, emit)
+	} else {
+		let lowSurrogate = ((codePoint & 0x3ff) + _MIN_LOW_SURROGATE)
+		let highSurrogate = ((codePoint >>> 10) + (_MIN_HIGH_SURROGATE - (_MIN_SUPPLEMENTARY_CODE_POINT >>> 10)))
+
+		emitUTF16EscapeSequence(Int32.fromNumber(highSurrogate), emit)
+		emitUTF16EscapeSequence(Int32.fromNumber(lowSurrogate), emit)
+	}
 }
 
 let lineEndingToString = (lineEnding: LineEnding) => {
@@ -320,7 +350,7 @@ let rec emitJSON = (json: JSON, format: FormattingSettings, emit) => {
 }
 
 export let print = (json: JSON, format: FormattingSettings) => {
-	emitJSON(json, format, Stubs.print_no_new_line)
+	emitJSON(json, format, print_no_new_line)
 }
 
 export let printCompact = (json: JSON) => print(json, defaultCompactFormat())
