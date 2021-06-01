@@ -41,6 +41,7 @@ let printSomething = () => {
 	print("")
 	print("prettier:")
 	// Compiler for some reason says the fields of FormattingSettings are not public.
+	// See https://github.com/grain-lang/grain/issues/190#issuecomment-851015909
 	Json.print(test, {
 		indentation: Json.IndentWithTab,
 		arrayFormat: Json.OneArrayEntryPerLine,
@@ -50,7 +51,12 @@ let printSomething = () => {
 		escapeAllControlPoints: true,
 		escapeHTMLUnsafeSequences: true,
 		escapeNonASCII: true
-	})
+	} : Json.FormattingSettings)
+
+	print("")
+	print("toString:")
+	print(Json.toStringPretty(test))
+	print(Json.toStringPretty(Json.JSONObject([("simple", Json.JSONString("as that!"))])))
 }
 
 printSomething();

@@ -1,0 +1,86 @@
+import Exception from "runtime/exception"
+import Bytes from "bytes"
+
+export record StringBuilder {
+	mut size: Number,
+	mut capacity: Number,
+	growthFunction: (Number, Number) -> Number,
+	mut buffer: Bytes
+}
+
+// TODO implement a smarter function.
+// The idea is to grow the size exponentially, but up to a certain point.
+// Because after that the risk is to saturate overall available memory.
+// In a WASM64 context different decisions can be made.
+
+let defaultGrowthFunction = (currentCapacity: Number, newRequiredCapacity: Number) => {
+	currentCapacity + currentCapacity * 2
+}
+
+export let makeWithGrowthFunction = (initialCapacity: Number, growthFunction: (Number, Number) -> Number) => {
+	if (initialCapacity <= 0)
+		throw Exception.InvalidArgument("initialCapacity must be a positive natural number")
+
+	{
+		size: 0,
+		capacity: initialCapacity,
+		growthFunction: growthFunction,
+		buffer: Bytes.make(initialCapacity)
+	}: StringBuilder
+}
+
+export let make = (initialCapacity: Number) => makeWithGrowthFunction(initialCapacity, defaultGrowthFunction);
+
+let growIfNeeded = (newSize: Number, builder: StringBuilder) => {
+	let growthFunction = builder.growthFunction
+	let currentSize = builder.size
+	let currentCapacity = builder.capacity
+	
+
+	let newGrowthCapacity = growthFunction(currentCapacity, newSize)
+
+	let newCapacity =
+		if (newGrowthCapacity >= newSize && newGrowthCapacity > 0) {
+			newGrowthCapacity
+		 } else {
+			newSize
+		 }
+	
+	if (newCapacity > currentCapacity) {
+		//print ("newCapacity: " ++ toString(newCapacity))
+
+		// create a new buffer with 
+		let oldBuffer = builder.buffer
+		let newBuffer = Bytes.make(newCapacity)
+		Bytes.move(0, 0, currentSize, oldBuffer, newBuffer)
+		builder.capacity = newCapacity
+		builder.buffer = newBuffer
+	}
+}
+
+export let append = (s: String, builder: StringBuilder) => {
+	// FIXME no way to append?
+	let tmp = Bytes.fromString(s);
+	let bytesToWrite = Bytes.length(tmp)
+
+	let currentSize = builder.size
+	let currentCapacity = builder.capacity
+
+	let newSize = currentSize + bytesToWrite
+
+	// resize if necessary
+	if (currentCapacity < newSize)
+		growIfNeeded(newSize, builder)
+
+	// Copy the string's content in the buffer offset by current size.
+	Bytes.move(0, currentSize, bytesToWrite, tmp, builder.buffer)
+
+	builder.size = newSize
+}
+
+export let toString = (builder: StringBuilder) => {
+	Bytes.toString(builder.buffer)
+}
+
+
+

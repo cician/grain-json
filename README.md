@@ -18,11 +18,10 @@ For now you need to have Grain already installed and on the path. Then just laun
 		but may not be a good idea.
 	- [ ] String escaping
 		[x] Unicode hex sequence escaping
-		[ ] Simplify and/or optimize
 	- [x] Arrays
 	- [x] Objects
-	- [ ] toString
-		For now I'm just doing only printing to the standard output.
-		Need a string buffer or something similar.
+	- [x] toString
+	- [ ] Simplify and optimize
+	- [ ] Docs
 - [ ] Parsing
 	TBD

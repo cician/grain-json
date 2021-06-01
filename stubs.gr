@@ -25,15 +25,6 @@ export let print_no_new_line = (value) => {
 }
 
 @disableGC
-export let numberToHex = (n: Number) => {
-	let i = Int32.fromNumber(n);
-	let ptr = WasmI32.fromGrain(i)
-	let int = WasmI32.load(ptr, 8n)
-	let hex = NumberUtils.itoa32(int, 16n)
-	hex
-}
-
-@disableGC
 export let int32ToHex = (i: Int32) => {
 	let ptr = WasmI32.fromGrain(i)
 	let int = WasmI32.load(ptr, 8n)

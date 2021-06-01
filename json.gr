@@ -1,10 +1,12 @@
 import List from "list"
 import Float64 from "float64"
-import { print_no_new_line, numberToHex, int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
+import { print_no_new_line, int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
 import Int32 from "int32"
+import Bytes from "bytes"
+import StringBuilder from "stringbuilder"
 
 export enum JSON {
 	JSONNull,
@@ -409,3 +411,17 @@ export let print = (json: JSON, format: FormattingSettings) => {
 export let printCompact = (json: JSON) => print(json, defaultCompactFormat())
 
 export let printPretty = (json: JSON) => print(json, defaultPrettyFormat())
+
+export let toString = (json: JSON, format: FormattingSettings) => {
+	// If we want to be smart about limiting allocations it may make sense to
+	// guesstimate the capacity by traversing the json .
+	let buf = StringBuilder.make(1)
+	emitJSON(json, format, (s) => {
+		StringBuilder.append(s, buf)
+	})
+	StringBuilder.toString(buf)
+}
+
+export let toStringCompact = (json: JSON) => toString(json, defaultCompactFormat())
+
+export let toStringPretty = (json: JSON) => toString(json, defaultPrettyFormat())
