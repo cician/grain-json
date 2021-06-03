@@ -3,26 +3,8 @@ This file contains stubs for functions that I think need to be part of Grain's s
 */
 
 import WasmI32 from "runtime/unsafe/wasmi32"
-import Memory from "runtime/unsafe/memory"
-import String from "runtime/string"
 import Int32 from "int32"
 import NumberUtils from "runtime/numberUtils"
-import Wasi from "runtime/wasi"
-
-@disableGC
-export let print_no_new_line = (value) => {
-	// This i based on String.print.
-	// Warning: I don't really know 100% what I'm doing here, but it works for me.
-	let ptr = WasmI32.fromGrain(String.toString(value))
-	let buf = Memory.malloc(37n)
-	let iov = buf
-	let written = WasmI32.add(buf, 32n)
-	WasmI32.store(iov, WasmI32.add(ptr, 8n), 0n)
-	WasmI32.store(iov, WasmI32.load(ptr, 4n), 4n)
-	WasmI32.store(iov, 1n, 8n)
-	Wasi.fd_write(1n, iov, 1n, written) // originally the 3rd param is 2n in String.print. What does it do?
-	Memory.free(buf)
-}
 
 @disableGC
 export let int32ToHex = (i: Int32) => {

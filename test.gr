@@ -3,7 +3,7 @@ import Json from "json"
 
 let printSomething = () => {
 	print("simple object: ")
-	Json.printPretty(Json.JSONObject([("hello", Json.JSONString("world!"))]))
+	print(Json.toStringPretty(Json.JSONObject([("hello", Json.JSONString("world!"))])))
 
 	let test = Json.JSONArray([
 		Json.JSONNull,
@@ -34,15 +34,15 @@ let printSomething = () => {
 	])
 
 	print("ugly:")
-	Json.printCompact(test)
+	print(Json.toStringCompact(test))
 	print("")
 	print("pretty:")
-	Json.printPretty(test)
+	print(Json.toStringPretty(test))
 	print("")
 	print("prettier:")
 	// Compiler for some reason says the fields of FormattingSettings are not public.
 	// See https://github.com/grain-lang/grain/issues/190#issuecomment-851015909
-	Json.print(test, {
+	print(Json.toString(test, {
 		indentation: Json.IndentWithTab,
 		arrayFormat: Json.OneArrayEntryPerLine,
 		objectFormat: Json.OneObjectEntryPerLine,
@@ -51,12 +51,19 @@ let printSomething = () => {
 		escapeAllControlPoints: true,
 		escapeHTMLUnsafeSequences: true,
 		escapeNonASCII: true
-	} : Json.FormattingSettings)
+	} : Json.FormattingSettings))
 
 	print("")
 	print("toString:")
 	print(Json.toStringPretty(test))
 	print(Json.toStringPretty(Json.JSONObject([("simple", Json.JSONString("as that!"))])))
+
+	let infinity = Float64.div(Float64.fromNumber(1), Float64.fromNumber(0))
+	let nan = Float64.div(Float64.fromNumber(0), Float64.fromNumber(0))
+	let negativeinfinity = Float64.div(Float64.fromNumber(-1), Float64.fromNumber(0))
+
+	print("not allowed:")
+	print(Json.toStringCompact(Json.JSONArray([Json.JSONNumber(infinity), Json.JSONNumber(negativeinfinity), Json.JSONNumber(nan)])))
 }
 
 printSomething();

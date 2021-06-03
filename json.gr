@@ -1,6 +1,6 @@
 import List from "list"
 import Float64 from "float64"
-import { print_no_new_line, int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
+import { int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
@@ -403,14 +403,6 @@ let rec emitJSON = (json: JSON, format: FormattingSettings, emit) => {
 	if (format.finishWithNewLine)
 		emit(lineEnding)
 }
-
-export let print = (json: JSON, format: FormattingSettings) => {
-	emitJSON(json, format, print_no_new_line)
-}
-
-export let printCompact = (json: JSON) => print(json, defaultCompactFormat())
-
-export let printPretty = (json: JSON) => print(json, defaultPrettyFormat())
 
 export let toString = (json: JSON, format: FormattingSettings) => {
 	// If we want to be smart about limiting allocations it may make sense to
