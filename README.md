@@ -21,6 +21,6 @@ For now you need to have Grain already installed and on the path. Then just laun
 	- [x] toString
 	- [ ] Simplify and optimize
 	- [ ] Docs
-	- [ ] License
+	- [x] License
 - [ ] Parsing
 	TBD
