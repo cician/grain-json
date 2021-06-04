@@ -1,12 +1,14 @@
 import List from "list"
 import Float64 from "float64"
-import { int32ToHex, unicodeCodepointToSurrogatePair } from "stubs"
+import { int32ToHex, unicodeCodepointToSurrogatePair, isFinite, isNaN } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
 import Int32 from "int32"
 import Bytes from "bytes"
 import StringBuilder from "stringbuilder"
+import Exception from "runtime/exception"
+import Option from "option"
 
 export enum JSON {
 	JSONNull,
@@ -115,19 +117,24 @@ export let defaultPrettyAndSafeFormat =
 		escapeNonASCII: true
 	} : FormattingSettings
 
-let printIndentation = (indentation: IndentationFormat, emit, indentationLevel: Number) => {
+record StringWriter {
+	write: (String) -> Void,
+}
+
+let printIndentation = (indentation: IndentationFormat, writer: StringWriter, indentationLevel: Number) => {
+	let write = writer.write
 	match (indentation) {
 		IndentWithTab => {
 			let mut count = 0
 			while (count < indentationLevel) {
-				emit("\u0009")
+				write("\u0009")
 				count += 1;
 			}
 		},
 		IndentWithSpaces(spacesPerIndentation) => {
 			let mut count = 0
 			while (count < indentationLevel*spacesPerIndentation) {
-				emit("\u0020")
+				write("\u0020")
 				count += 1;
 			}
 		},
@@ -135,32 +142,36 @@ let printIndentation = (indentation: IndentationFormat, emit, indentationLevel: 
 	}
 }
 
-let emitUTF16EscapeSequence = (codePoint: Int32, emit) => {
+let emitUTF16EscapeSequence = (codePoint: Int32, writer: StringWriter) => {
 	// if (codePoint < 0n || codePoint > 0xFFFFn)
 	// 	throw InvalidArgument("emitUTF16EscapeSequence() codePoint must be between 0 and 0xFFFF")
 
-	emit("\\u");
+	let write = writer.write
+
+	write("\\u");
 	let hex = int32ToHex(codePoint)
 	let mut len = String.length(hex)
 	while (len < 4) {
-		emit("0")
+		write("0")
 		len += 1;
 	}
-	emit(hex);
+	write(hex);
 }
 
-let emitEscapedUnicodeSequence = (codePoint: Number, emit) => {
+let emitEscapedUnicodeSequence = (codePoint: Number, writer: StringWriter) => {
+	let write = writer.write
+
 	// See the String section in the ECMA-404 doc.
 	// If the code point is "in the Basic Multilingual Plane", that is
 	// in range 0..65535. Greater values need to be split into two
 	// UTF-16 chunks.
 	let i = Int32.fromNumber(codePoint);
 	if (codePoint <= 0xFFFF) {
-		emitUTF16EscapeSequence(i, emit)
+		emitUTF16EscapeSequence(i, writer)
 	} else {
 		let (lowSurrogate, highSurrogate) = unicodeCodepointToSurrogatePair(codePoint)
-		emitUTF16EscapeSequence(Int32.fromNumber(highSurrogate), emit)
-		emitUTF16EscapeSequence(Int32.fromNumber(lowSurrogate), emit)
+		emitUTF16EscapeSequence(Int32.fromNumber(highSurrogate), writer)
+		emitUTF16EscapeSequence(Int32.fromNumber(lowSurrogate), writer)
 	}
 }
 
@@ -174,7 +185,9 @@ let lineEndingToString = (lineEnding: LineEnding) => {
 }
 
 // Escapes the provided string and emits the result char by char with the emit function.
-let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
+let emitEscapedString = (s: String, format: FormattingSettings, writer: StringWriter) => {
+	let write = writer.write
+
 	// Escape the string.
 	// Probably a good candidate for low level optimization.
 	// Mostly to avoid allocating the char array.
@@ -188,13 +201,13 @@ let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
 		char = chars[i];
 
 		match (char) {
-			'\u0008' => emit("\\b"), // backspace
-			'\u0009' => emit("\\t"), // tab
-			'\u000A' => emit("\\n"), // line feed
-			'\u000C' => emit("\\f"), // form feed
-			'\u000D' => emit("\\r"), // carriage return
-			'\u0022' => emit("\\\""), // quotation mark
-			'\u005C' => emit("\\\\"), // backslash or "Reverse Solidus"
+			'\u0008' => write("\\b"), // backspace
+			'\u0009' => write("\\t"), // tab
+			'\u000A' => write("\\n"), // line feed
+			'\u000C' => write("\\f"), // form feed
+			'\u000D' => write("\\r"), // carriage return
+			'\u0022' => write("\\\""), // quotation mark
+			'\u005C' => write("\\\\"), // backslash or "Reverse Solidus"
 			//c => emit(toString(c))
 			c => {
 				let codePoint = Char.code(char);
@@ -224,10 +237,10 @@ let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
 					// other than printable ASCII characters for compatiblity, easier transport,
 					// embedding etc. Thus I've decided to expose options for this, but otherwise
 					// just a sane default would suffice.
-					emitEscapedUnicodeSequence(codePoint, emit)
+					emitEscapedUnicodeSequence(codePoint, writer)
 				} else if (codePoint >= 127 && codePoint <= 159 && format.escapeAllControlPoints) {
 					// ASCII control point 127 and unicode control point group C1 (128-159)
-					emitEscapedUnicodeSequence(codePoint, emit)
+					emitEscapedUnicodeSequence(codePoint, writer)
 
 					// There could be more control points or otherwise escape worthy codepoints,
 					// but covering that would be overkill. For everything outside of the ASCII
@@ -235,7 +248,7 @@ let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
 					// nothing, including the .
 				} else if (codePoint >= 128 && format.escapeNonASCII) {
 					// If the user chooses to do so, escape all non ASCII code points.
-					emitEscapedUnicodeSequence(codePoint, emit)
+					emitEscapedUnicodeSequence(codePoint, writer)
 				} else if (char == '/' && format.escapeHTMLUnsafeSequences) {
 					// Additionally many JSON libraries escape additional two character sequences for
 					// direct embedding into html for example. This is specifically to avoid emitting
@@ -244,13 +257,13 @@ let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
 					// not necessarily "\u002F"). This more conservative approach only escapes it
 					// when needed.
 					if (prevChar == '<') {
-						emit("\\/")
+						write("\\/")
 					} else {
 						// otherwise just emit the slash as-is
-						emit("/")
+						write("/")
 					}
 				} else {
-					emit(toString(char))
+					write(toString(char))
 				}
 			}
 		}
@@ -260,158 +273,249 @@ let emitEscapedString = (s: String, format: FormattingSettings, emit) => {
 	}
 }
 
-let emitEscapedQuotedString = (s: String, format: FormattingSettings, emit) => {
-	emit("\"")
-	emitEscapedString(s, format, emit)
-	emit("\"")
+let emitEscapedQuotedString = (s: String, format: FormattingSettings, writer: StringWriter) => {
+	let write = writer.write
+
+	write("\"")
+	emitEscapedString(s, format, writer)
+	write("\"")
 }
+
+export exception InvalidJSON(String)
 
 // FIXME can't define explicit type for the emit parameter
 // or am I doing something wrong?
-let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: String, emit, indentationLevel: Number) => {
+let rec emitJSONElement = (json: JSON, format: FormattingSettings, lineEnding: String, writer: StringWriter, indentationLevel: Number) => {
+	let write = writer.write
+
+	let mut err = None : Option<Exception>;
+
 	match (json) {
-		JSONNull => emit("null"),
+		JSONNull => write("null"),
 
-		// FIXME why does it sometimes require other times not? Seemingly at random.
-		// JSONBoolean(true) => emit("true"),
-		// JSONBoolean(false) => emit("false"),
-		
-		JSONBoolean(b) => emit(if (b) "true" else "false"),
+		JSONBoolean(b) => write(if (b) "true" else "false"),
 
-		// FIXME is Grain's printing of bools and numbers always compatible with JSON?
-		// Probably, but we probably want to customize a bit.
-		// For example to print natural numberso without ".0" for compactness sake.
-		// Maybe customizable? Node does it.
-		// FIXME does grain allow Inf and NaN?
-		// These are not supported JSON values.
-		// What to do with them?
-		JSONNumber(n) => emit(toString(n)),
+		JSONNumber(n) => {
+			if (isFinite(n)) {
+				// In order to not duplicate code here I simply use Grain's
+				// toString of Float64. This is a bit risky because as far as I
+				// can tell what it outputs is not formally documented. So
+				// any changes to that could result in invalid JSON here. For
+				// now at least it was considered the way to go. If one day a
+				// decision is made to fork that function. The starting point
+				// would be NumberUtils.dtoa and some optimizations could
+				// probably be done like avoiding memory allocations or
+				// checking for NaNs/Infs two times.
+				write(toString(n))
+			} else {
+				// JSON standard doesn't allow NaN or infinite values in numbers,
+				// but WASM f64 (IEEE 754-2008), as well as Grain's number types do
+				// (Float64 as well as Number). This is the only reason that the
+				// formatting needs to return a Result and not just a String
+				// directly. Other possible choices were to throw exceptions or to
+				// coninue formatting without representing these values correctly
+				// (like JavaScript's JSON.stringify).
+				if (isNaN(n)) {
+					err = Some(InvalidJSON("NaN is not allowed in JSONNumber"))
+				} else if (Float64.lt(n, Float64.fromNumber(0))) {
+					err = Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
+				} else {
+					err = Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
+				}
+			}
+		},
 
-		JSONString(s) => emitEscapedQuotedString(s, format, emit),
+		JSONString(s) => emitEscapedQuotedString(s, format, writer),
 
 		JSONArray(elems) => {
-			match (format.arrayFormat) {
-				CompactArrayEntries => {
-					emit("[")
-					// FIXME doest it always allocate the lambda?
-					List.forEachi(
-						(e, i) => {
-							if (i > 0)
-								emit(",")
-							emitJSONElement(e, format, lineEnding, emit, indentationLevel+1)
-						},
-						elems
-					)
-					emit("]")
-				},
-				OneArrayEntryPerLine => {
-					match (elems) {
-						[] => {
-							emit("[]")
-						},
-						[e] => {
-							emit("[ ")
-							emitJSONElement(e, format, lineEnding, emit, indentationLevel+1)
-							emit(" ]")
-						},
-						elems => {
-							emit("[")
-							emit(lineEnding)
-							List.forEachi(
-								(e, i) => {
-									if (i > 0) {
-										emit(",")
-										emit(lineEnding)
-									}
-									printIndentation(format.indentation, emit, indentationLevel+1)
-									
-									emitJSONElement(e, format, lineEnding, emit, indentationLevel+1)
-								},
-								elems
-							)
-							emit(lineEnding)
-							printIndentation(format.indentation, emit, indentationLevel)
-							emit("]")
+			// Here I'm not using List.forEachi or similar in order to avoid allocations of closures.
+			// The code is verbose and a bit ugly as a consequence, but I think it's an OK price for
+			// [presumed] performance gain. Another approach would be to allocate a function for
+			// formattng arrays just once at the start of formatting and pass it in emitJSONElement.
+			
+			match (elems) {
+				[] => write("[]"),
+				[e] => {
+					write(
+						match (format.arrayFormat) {
+							CompactArrayEntries => "[",
+							OneArrayEntryPerLine => "[ "
 						}
+					)
+					err = emitJSONElement(e, format, lineEnding, writer, indentationLevel+1)
+					if (Option.isNone(err)) {
+						write(
+							match (format.arrayFormat) {
+								CompactArrayEntries => "]",
+								OneArrayEntryPerLine => " ]"
+							}
+						)
+					}
+				},
+				[initialHead, ...initialRest] => {
+					write("[")
+					if (format.arrayFormat == OneArrayEntryPerLine)
+						write(lineEnding)
+
+					let mut currentHead = initialHead
+					let mut currentRest = initialRest
+
+					for (let mut index = 0; ; index += 1) {
+						if (index > 0) {
+							write(",")
+							if (format.arrayFormat == OneArrayEntryPerLine)
+								write(lineEnding)
+						}
+
+						if (format.arrayFormat == OneArrayEntryPerLine)
+							printIndentation(format.indentation, writer, indentationLevel+1)
+						
+						let elementError = emitJSONElement(currentHead, format, lineEnding, writer, indentationLevel+1)
+						match(elementError) {
+							None => void,
+							Some(e) => {
+								err = elementError
+								break
+							}
+						}
+
+						match (currentRest) {
+							[] => break,
+							[newHead, ...newRest] => {
+								currentHead = newHead
+								currentRest = newRest
+							}
+						}
+					}
+
+					if (Option.isNone(err)) {
+						if (format.arrayFormat == OneArrayEntryPerLine) {
+							write(lineEnding)
+							printIndentation(format.indentation, writer, indentationLevel)
+						}
+						write("]")
 					}
 				}
 			}
 		},
 
 		JSONObject(entries) => {
-			match (format.objectFormat) {
-				CompactObjectEntries => {
-					emit("{")
-					List.forEachi(
-						((key, value), i) => {
-							if (i > 0)
-								emit(",")
-
-							emitEscapedQuotedString(key, format, emit)
-							emit(":")
-							emitJSONElement(value, format, lineEnding, emit, indentationLevel+1)
-						},
-						entries
-					)
-					emit("}")
-				},
-				OneObjectEntryPerLine => {
-					match (entries) {
-						[] => {
-							emit("{}")
-						},
-						[(key, value)] => {
-							emit("{ ")
-							emitEscapedQuotedString(key, format, emit)
-							emit(": ")
-							emitJSONElement(value, format, lineEnding, emit, indentationLevel+1)
-							emit(" }")
-						},
-						entries => {
-							emit("{")
-							emit(lineEnding)
-							List.forEachi(
-								((key, value), i) => {
-									if (i > 0) {
-										emit(",")
-										emit(lineEnding)
-									}
-									printIndentation(format.indentation, emit, indentationLevel+1)
-									
-									emitEscapedQuotedString(key, format, emit)
-									emit(": ")
-									emitJSONElement(value, format, lineEnding, emit, indentationLevel+1)
-								},
-								entries
-							)
-							emit(lineEnding)
-							printIndentation(format.indentation, emit, indentationLevel)
-							emit("}")
+			match (entries) {
+				[] => write("{}"),
+				[(key, value)] => {
+					write(
+						match (format.objectFormat) {
+							CompactObjectEntries => "{",
+							OneObjectEntryPerLine => "{ "
 						}
+					)
+					
+					emitEscapedQuotedString(key, format, writer)
+					write(
+						match (format.objectFormat) {
+							CompactObjectEntries => ":",
+							OneObjectEntryPerLine => ": "
+						}
+					)
+					err = emitJSONElement(value, format, lineEnding, writer, indentationLevel+1)
+
+					if (Option.isNone(err)) {
+						write(
+							match (format.objectFormat) {
+								CompactObjectEntries => "}",
+								OneObjectEntryPerLine => " }"
+							}
+						)
+					}
+				},
+				[initialHead, ...initialRest] => {
+					write("{")
+					if (format.objectFormat == OneObjectEntryPerLine)
+						write(lineEnding)
+
+					let mut currentHead = initialHead
+					let mut currentRest = initialRest
+
+					for (let mut index = 0; ; index += 1) {
+						if (index > 0) {
+							write(",")
+							if (format.objectFormat == OneObjectEntryPerLine)
+								write(lineEnding)
+						}
+
+						if (format.objectFormat == OneObjectEntryPerLine)
+							printIndentation(format.indentation, writer, indentationLevel+1)
+
+						let (key, value) = currentHead
+						
+						emitEscapedQuotedString(key, format, writer)
+						write(
+							match (format.objectFormat) {
+								CompactObjectEntries => ":",
+								OneObjectEntryPerLine => ": "
+							}
+						)
+						let elementError = emitJSONElement(value, format, lineEnding, writer, indentationLevel+1)
+						match(elementError) {
+							None => void,
+							Some(e) => {
+								err = elementError
+								break
+							}
+						}
+
+						match (currentRest) {
+							[] => break,
+							[newHead, ...newRest] => {
+								currentHead = newHead
+								currentRest = newRest
+							}
+						}
+					}
+
+					if (Option.isNone(err)) {
+						if (format.objectFormat == OneObjectEntryPerLine) {
+							write(lineEnding)
+							printIndentation(format.indentation, writer, indentationLevel)
+						}
+						write("}")
 					}
 				}
 			}
 		}
 	}
+
+	err
 }
 
-let rec emitJSON = (json: JSON, format: FormattingSettings, emit) => {
+let emitJSON = (json: JSON, format: FormattingSettings, writer: StringWriter) => {
+	let write = writer.write
+
 	let lineEnding = lineEndingToString(format.lineEnding)
 
-	emitJSONElement(json, format, lineEnding, emit, 0)
+	let error = emitJSONElement(json, format, lineEnding, writer, 0)
 
-	if (format.finishWithNewLine)
-		emit(lineEnding)
+	if (format.finishWithNewLine && Option.isNone(error))
+		write(lineEnding)
+
+	error
 }
 
 export let toString = (json: JSON, format: FormattingSettings) => {
 	// If we want to be smart about limiting allocations it may make sense to
 	// guesstimate the capacity by traversing the json .
-	let buf = StringBuilder.make(1)
-	emitJSON(json, format, (s) => {
-		StringBuilder.append(s, buf)
-	})
-	StringBuilder.toString(buf)
+	let buf = StringBuilder.make(16)
+
+	let writer = {
+		write: (s) => StringBuilder.append(s, buf)
+	} : StringWriter
+
+	let error = emitJSON(json, format, writer)
+
+	match (error) {
+		None => Ok(StringBuilder.toString(buf)),
+		Some(e) => Err(e)
+	}
 }
 
 export let toStringCompact = (json: JSON) => toString(json, defaultCompactFormat())

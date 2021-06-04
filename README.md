@@ -13,15 +13,14 @@ For now you need to have Grain already installed and on the path. Then just laun
 # TODO
 - [ ] Formatting
 	- [x] Bools
-	- [ ] Numbers
-		For now just using grain's toString of Float64, which works,
-		but may not be a good idea.
-	- [ ] String escaping
-		[x] Unicode hex sequence escaping
+	- [x] Numbers
+	- [x] String escaping
+		- [x] Unicode hex sequence escaping
 	- [x] Arrays
 	- [x] Objects
 	- [x] toString
 	- [ ] Simplify and optimize
 	- [ ] Docs
+	- [ ] License
 - [ ] Parsing
 	TBD

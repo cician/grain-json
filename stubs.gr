@@ -4,6 +4,9 @@ This file contains stubs for functions that I think need to be part of Grain's s
 
 import WasmI32 from "runtime/unsafe/wasmi32"
 import Int32 from "int32"
+import Float64 from "float64"
+import Conv from "runtime/unsafe/conv"
+import WasmF64 from "runtime/unsafe/wasmf64"
 import NumberUtils from "runtime/numberUtils"
 
 @disableGC
@@ -12,6 +15,18 @@ export let int32ToHex = (i: Int32) => {
 	let int = WasmI32.load(ptr, 8n)
 	let hex = NumberUtils.itoa32(int, 16n)
 	hex
+}
+
+// This is taken from NumberUtils and adapted to work on Float64
+// I'd add these to Float64 module and .
+export let isFinite = (value: Float64) => {
+	let wf64 = Conv.fromFloat64(value)
+	WasmF64.eq(WasmF64.sub(wf64, wf64), 0.W)
+}
+
+export let isNaN = (value: Float64) => {
+	let wf64 = Conv.fromFloat64(value)
+  	WasmF64.ne(wf64, wf64)
 }
 
 export let unicodeCodepointToSurrogatePair = (codePoint: Number) => {

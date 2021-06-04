@@ -1,9 +1,18 @@
 import Float64 from "float64"
 import Json from "json"
+import Result from "result"
+import Exception from "runtime/exception"
+
+let testPrint = (result: Result<String,Exception>) => {
+	match (result) {
+		Ok(s) => print(s),
+		Err(e) => Exception.printException(e)
+	}
+}
 
 let printSomething = () => {
 	print("simple object: ")
-	print(Json.toStringPretty(Json.JSONObject([("hello", Json.JSONString("world!"))])))
+	testPrint(Json.toStringPretty(Json.JSONObject([("hello", Json.JSONString("world!"))])))
 
 	let test = Json.JSONArray([
 		Json.JSONNull,
@@ -34,15 +43,15 @@ let printSomething = () => {
 	])
 
 	print("ugly:")
-	print(Json.toStringCompact(test))
+	testPrint(Json.toStringCompact(test))
 	print("")
 	print("pretty:")
-	print(Json.toStringPretty(test))
+	testPrint(Json.toStringPretty(test))
 	print("")
 	print("prettier:")
 	// Compiler for some reason says the fields of FormattingSettings are not public.
 	// See https://github.com/grain-lang/grain/issues/190#issuecomment-851015909
-	print(Json.toString(test, {
+	testPrint(Json.toString(test, {
 		indentation: Json.IndentWithTab,
 		arrayFormat: Json.OneArrayEntryPerLine,
 		objectFormat: Json.OneObjectEntryPerLine,
@@ -55,15 +64,15 @@ let printSomething = () => {
 
 	print("")
 	print("toString:")
-	print(Json.toStringPretty(test))
-	print(Json.toStringPretty(Json.JSONObject([("simple", Json.JSONString("as that!"))])))
+	testPrint(Json.toStringPretty(test))
+	testPrint(Json.toStringPretty(Json.JSONObject([("simple", Json.JSONString("as that!"))])))
 
 	let infinity = Float64.div(Float64.fromNumber(1), Float64.fromNumber(0))
 	let nan = Float64.div(Float64.fromNumber(0), Float64.fromNumber(0))
 	let negativeinfinity = Float64.div(Float64.fromNumber(-1), Float64.fromNumber(0))
 
 	print("not allowed:")
-	print(Json.toStringCompact(Json.JSONArray([Json.JSONNumber(infinity), Json.JSONNumber(negativeinfinity), Json.JSONNumber(nan)])))
+	testPrint(Json.toStringCompact(Json.JSONArray([Json.JSONNumber(infinity), Json.JSONNumber(negativeinfinity), Json.JSONNumber(nan)])))
 }
 
 printSomething();
