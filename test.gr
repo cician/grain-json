@@ -1,4 +1,3 @@
-import Float64 from "float64"
 import Json from "json"
 import Result from "result"
 import Exception from "runtime/exception"
@@ -18,23 +17,22 @@ let printSomething = () => {
 		Json.JSONNull,
 		Json.JSONBoolean(true),
 		Json.JSONBoolean(false),
-		Json.JSONNumber(Float64.fromNumber(2)),
-		Json.JSONNumber(Float64.fromNumber(-2)),
-		Json.JSONNumber(Float64.fromNumber(-0)),
-		Json.JSONNumber(Float64.fromNumber(1E200)),
-		Json.JSONNumber(Float64.fromNumber(1E-200)),
-		// Json.JSONNumber(Float64.fromNumber(inf)),
+		Json.JSONNumber(2),
+		Json.JSONNumber(-2),
+		Json.JSONNumber(-0),
+		Json.JSONNumber(1E200),
+		Json.JSONNumber(1E-200),
 		Json.JSONString("🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿 Hello\n\"wo</ \u007F \u0080 rld\"! 🤘🏻"),
 		Json.JSONArray([]),
 		Json.JSONArray([Json.JSONNull]),
 		Json.JSONArray([
-			Json.JSONNumber(Float64.fromNumber(1)),
-			Json.JSONNumber(Float64.fromNumber(2)),
-			Json.JSONNumber(Float64.fromNumber(3))
+			Json.JSONNumber(1),
+			Json.JSONNumber(2),
+			Json.JSONNumber(3)
 		]),
 		Json.JSONObject([
 			("pinco", Json.JSONString("pallino")),
-			("pippo", Json.JSONNumber(Float64.fromNumber(4543)))
+			("pippo", Json.JSONNumber(4543))
 		]),
 		Json.JSONObject([
 			("just", Json.JSONString("one"))
@@ -67,12 +65,19 @@ let printSomething = () => {
 	testPrint(Json.toStringPretty(test))
 	testPrint(Json.toStringPretty(Json.JSONObject([("simple", Json.JSONString("as that!"))])))
 
-	let infinity = Float64.div(Float64.fromNumber(1), Float64.fromNumber(0))
-	let nan = Float64.div(Float64.fromNumber(0), Float64.fromNumber(0))
-	let negativeinfinity = Float64.div(Float64.fromNumber(-1), Float64.fromNumber(0))
+	// There's currently a github issue for these https://github.com/grain-lang/grain/issues/693
+	let infinity = 1.0 / 0.0
+	let nan = 0.0 / 0.0
+	let negativeinfinity = -1.0 / 0.0
 
 	print("not allowed:")
 	testPrint(Json.toStringCompact(Json.JSONArray([Json.JSONNumber(infinity), Json.JSONNumber(negativeinfinity), Json.JSONNumber(nan)])))
+
+	// print("")
+	// print("parsing:")
+	// print(Json.parse("{\"n\": [1,2,\"3\",false,null]}{}"))
+	// print(Json.parse("{}ignored"))
+	// print(Json.parse("[true,false,null,\"hello\",[true]]"))
 }
 
 printSomething();

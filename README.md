@@ -10,6 +10,8 @@ For now you need to have Grain already installed and on the path. Then just laun
 # Resources
 - [The JSON spec](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/)
 
+- When you think you've done a good job optimizing the code, look at [this](https://www.infoq.com/presentations/simdjson-parser/) and think again. Not that I'd go into this crazy level of optimization. Just leaving a note here for inspiration.
+
 # TODO
 - [ ] Formatting
 	- [x] Bools
@@ -20,7 +22,8 @@ For now you need to have Grain already installed and on the path. Then just laun
 	- [x] Objects
 	- [x] toString
 	- [ ] Simplify and optimize
-	- [ ] Docs
-	- [x] License
 - [ ] Parsing
 	TBD
+- [x] License
+- [ ] Tests
+- [ ] Docs

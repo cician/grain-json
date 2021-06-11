@@ -1,5 +1,8 @@
 import Exception from "runtime/exception"
 import Bytes from "bytes"
+import WasmI32 from "runtime/unsafe/wasmi32"
+import String from "string"
+import Stubs from "stubs"
 
 export record StringBuilder {
 	mut size: Number,
@@ -8,13 +11,17 @@ export record StringBuilder {
 	mut buffer: Bytes
 }
 
-// TODO implement a smarter function.
-// The idea is to grow the size exponentially, but up to a certain point.
-// Because after that the risk is to saturate overall available memory.
-// In a WASM64 context different decisions can be made.
-
 let defaultGrowthFunction = (currentCapacity: Number, newRequiredCapacity: Number) => {
-	currentCapacity + currentCapacity * 2
+	// The idea is to grow the size exponentially to quickly adapt in situations with
+	// many small writes, but only up to a certain point because after that the risk
+	// is to saturate overall available memory. After that .
+	// In a WASM64 context different decisions can be made.
+
+	if (currentCapacity < 104857600) { // arbitrary limit of 100MiB
+		currentCapacity + currentCapacity * 2
+	} else {
+		currentCapacity + 1048576 // arbitrary increment of 1MiB
+	}
 }
 
 export let makeWithGrowthFunction = (initialCapacity: Number, growthFunction: (Number, Number) -> Number) => {
@@ -35,7 +42,6 @@ let growIfNeeded = (newSize: Number, builder: StringBuilder) => {
 	let growthFunction = builder.growthFunction
 	let currentSize = builder.size
 	let currentCapacity = builder.capacity
-	
 
 	let newGrowthCapacity = growthFunction(currentCapacity, newSize)
 
@@ -58,10 +64,43 @@ let growIfNeeded = (newSize: Number, builder: StringBuilder) => {
 	}
 }
 
+let ensureFreeCapacity = (size: Number, builder: StringBuilder) => {
+	let currentSize = builder.size
+	let currentCapacity = builder.capacity
+
+	let newSize = currentSize + size
+
+	// resize if necessary
+	if (currentCapacity < newSize)
+		growIfNeeded(newSize, builder)
+}
+
 export let append = (s: String, builder: StringBuilder) => {
-	// FIXME no way to append?
-	let tmp = Bytes.fromString(s);
-	let bytesToWrite = Bytes.length(tmp)
+	let srcStrPtr = WasmI32.fromGrain(s)
+	let bytesToWrite = String.byteLength(s)
+
+	let currentSize = builder.size
+
+	let newSize = currentSize + bytesToWrite
+
+	// resize if necessary
+	ensureFreeCapacity(bytesToWrite, builder)
+
+	// Copy the string's content in the buffer offset by current size.
+	let bytesWritten = Stubs.writeStringToBytesAsUTF8(currentSize, s, builder.buffer)
+	assert(bytesWritten == bytesToWrite)
+
+	builder.size = newSize
+}
+
+export let appendChar = (c: Char, builder: StringBuilder) => {
+	// append(toString(c), builder)
+
+	// Technically this gets computed two times. Here and in writeCharToBytesAsUTF8.
+	// If we want to avoid calculating it two times there are two choices:
+	// a) Just make sure there are always 4 free bytes in the buffer.
+	// b) Incorporate the content of writeCharToBytesAsUTF8 here.
+	let bytesToWrite = Stubs.charUTF8SizeInBytes(c)
 
 	let currentSize = builder.size
 	let currentCapacity = builder.capacity
@@ -69,11 +108,27 @@ export let append = (s: String, builder: StringBuilder) => {
 	let newSize = currentSize + bytesToWrite
 
 	// resize if necessary
-	if (currentCapacity < newSize)
-		growIfNeeded(newSize, builder)
+	ensureFreeCapacity(bytesToWrite, builder)
 
-	// Copy the string's content in the buffer offset by current size.
-	Bytes.move(0, currentSize, bytesToWrite, tmp, builder.buffer)
+	let bytesWritten = Stubs.writeCharToBytesAsUTF8(currentSize, c, builder.buffer)
+	assert(bytesWritten == bytesToWrite)
+
+	builder.size = newSize
+}
+
+export let appendUnicodeCodePoint = (code: Number, builder: StringBuilder) => {
+	let bytesToWrite = Stubs.numberOfBytesForUTF8CodePoint(code)
+
+	let currentSize = builder.size
+	let currentCapacity = builder.capacity
+
+	let newSize = currentSize + bytesToWrite
+
+	// resize if necessary
+	ensureFreeCapacity(bytesToWrite, builder)
+
+	let bytesWritten = Stubs.writeUnicodeCodePointToBytesAsUTF8(currentSize, code, builder.buffer)
+	assert(bytesWritten == bytesToWrite)
 
 	builder.size = newSize
 }
@@ -81,6 +136,3 @@ export let append = (s: String, builder: StringBuilder) => {
 export let toString = (builder: StringBuilder) => {
 	Bytes.toString(builder.buffer)
 }
-
-
-

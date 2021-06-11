@@ -3,40 +3,317 @@ This file contains stubs for functions that I think need to be part of Grain's s
 */
 
 import WasmI32 from "runtime/unsafe/wasmi32"
-import Int32 from "int32"
-import Float64 from "float64"
-import Conv from "runtime/unsafe/conv"
+import WasmI64 from "runtime/unsafe/wasmi64"
+import WasmF32 from "runtime/unsafe/wasmf32"
 import WasmF64 from "runtime/unsafe/wasmf64"
-import NumberUtils from "runtime/numberUtils"
+import Memory from "runtime/unsafe/memory"
+import { tagSimpleNumber } from "runtime/dataStructures"
+import { boxedNumberTag, boxedInt32Number, boxedInt64Number } from "runtime/numbers"
+import String from "string"
+import Exception from "runtime/exception"
+import Tags from "runtime/unsafe/tags"
+
+// A few functions actually present in the runtime but not exposed,
+// copied here only to implement other stubs.
 
 @disableGC
-export let int32ToHex = (i: Int32) => {
-	let ptr = WasmI32.fromGrain(i)
-	let int = WasmI32.load(ptr, 8n)
-	let hex = NumberUtils.itoa32(int, 16n)
-	hex
+let isSimpleNumber = (x) => {
+  WasmI32.eq(WasmI32.and(x, Tags._GRAIN_NUMBER_TAG_MASK), Tags._GRAIN_NUMBER_TAG_TYPE)
 }
 
-// This is taken from NumberUtils and adapted to work on Float64
-// I'd add these to Float64 module and .
-export let isFinite = (value: Float64) => {
-	let wf64 = Conv.fromFloat64(value)
-	WasmF64.eq(WasmF64.sub(wf64, wf64), 0.W)
+@disableGC
+let isBoxedNumber = (x) => {
+  if (WasmI32.eq(WasmI32.and(x, Tags._GRAIN_GENERIC_TAG_MASK), Tags._GRAIN_GENERIC_HEAP_TAG_TYPE)) {
+    WasmI32.eq(WasmI32.load(x, 0n), Tags._GRAIN_BOXED_NUM_HEAP_TAG)
+  } else {
+    false
+  }
 }
 
-export let isNaN = (value: Float64) => {
-	let wf64 = Conv.fromFloat64(value)
-  	WasmF64.ne(wf64, wf64)
+@disableGC
+let untagSimple = (x) => {
+  WasmI32.shrS(x, 1n)
 }
 
-export let unicodeCodepointToSurrogatePair = (codePoint: Number) => {
-	// The content of this function is based on code from OpenJDK and thus subject to the GPL license (not LGPL).
-	// So it may be for the better if someone else reimplemented it scratch.
-	let _MIN_LOW_SURROGATE = 0xDC00
-	let _MIN_HIGH_SURROGATE = 0xD800
-	let _MIN_SUPPLEMENTARY_CODE_POINT = 0x010000
+@disableGC
+export let isFinite = (n: Number) => {
+	let x = WasmI32.fromGrain(n)
+	if (isBoxedNumber(x)) {
+		// Boxed numbers can have many types. Of which float32 and float64 can be infinite,
+		// Grain doesn't allow creating a rational with denominator of zero.
+		let tag = WasmI32.load(x, 4n)
+		if (WasmI32.eq(tag, Tags._GRAIN_FLOAT32_BOXED_NUM_TAG)) {
+			let wf32 = WasmF32.load(x, 8n)
+			WasmF32.eq(WasmF32.sub(wf32, wf32), 0.w)
+		} else if (WasmI32.eq(tag, Tags._GRAIN_FLOAT64_BOXED_NUM_TAG)) {
+			let wf64 = WasmF64.load(x, 8n)
+			WasmF64.eq(WasmF64.sub(wf64, wf64), 0.W)
+		} else {
+			true
+		}
+	} else {
+		// Simple numbers are integers and cannot be infinite.
+		true
+	}
+}
 
-	let lowSurrogate = ((codePoint & 0x3ff) + _MIN_LOW_SURROGATE)
-	let highSurrogate = ((codePoint >>> 10) + (_MIN_HIGH_SURROGATE - (_MIN_SUPPLEMENTARY_CODE_POINT >>> 10)))
-	(lowSurrogate,highSurrogate)
+@disableGC
+export let isNaN = (n: Number) => {
+	let x = WasmI32.fromGrain(n)
+	if (isBoxedNumber(x)) {
+		// Boxed numbers can have many types. Of which float32 and float64 can be NaN,
+		let tag = WasmI32.load(x, 4n)
+		if (WasmI32.eq(tag, Tags._GRAIN_FLOAT32_BOXED_NUM_TAG)) {
+			let wf32 = WasmF32.load(x, 8n)
+			WasmF32.ne(wf32, wf32)
+		} else if (WasmI32.eq(tag, Tags._GRAIN_FLOAT64_BOXED_NUM_TAG)) {
+			let wf64 = WasmF64.load(x, 8n)
+			WasmF64.ne(wf64, wf64)
+		} else {
+			false
+		}
+	} else {
+		// Simple numbers are integers and cannot be NaN.
+		false
+	}
+}
+
+@disableGC
+export let coerceNumberToWasmI32 = (n: Number) => {
+	let x = WasmI32.fromGrain(n)
+
+	let _I32_MAX = 0x7fffffffN
+
+	let _I32_MIN = -0x7fffffffN
+
+	let asInt64 =
+		if (isSimpleNumber(x)) {
+    		WasmI64.extendI32S(untagSimple(x))
+  		} else {
+			let xtag = boxedNumberTag(x)
+			match (xtag) {
+				t when WasmI32.eq(t, Tags._GRAIN_INT32_BOXED_NUM_TAG) => {
+					WasmI64.extendI32S(boxedInt32Number(x))
+				},
+				t when WasmI32.eq(t, Tags._GRAIN_INT64_BOXED_NUM_TAG) => {
+					boxedInt64Number(x)
+				},
+				_ => {
+					// rationals are never integral, and we refuse to coerce floats to ints
+					throw Exception.NumberNotIntlike
+				}
+			}
+	}
+	
+	if (WasmI64.gtS(asInt64, _I32_MAX) || WasmI64.ltS(asInt64, _I32_MIN)) {
+		throw Exception.Overflow
+	}
+	WasmI32.wrapI64(asInt64)
+}
+
+let _MIN_LOW_SURROGATE = 0xDC00
+let _MIN_HIGH_SURROGATE = 0xD800
+
+export let getUnicodeCodepointUTF16LowSurrogate = (codePoint: Number) => {
+	// The content of this function is based on code from the .NET runtime
+	// (MIT licensed).
+	(codePoint & 0x3FF) + _MIN_LOW_SURROGATE
+}
+
+
+export let getUnicodeCodepointUTF16HighSurrogate = (codePoint: Number) => {
+	// The content of this function is based on code from the .NET runtime
+	// (MIT licensed).
+	(codePoint + ((_MIN_HIGH_SURROGATE - 0x40) << 10)) >> 10
+}
+
+export let unicodeCodepointToUTF16SurrogatePair = (codePoint: Number) => {
+	(getUnicodeCodepointUTF16LowSurrogate(codePoint), getUnicodeCodepointUTF16HighSurrogate(codePoint))
+}
+
+let _STRING_SIZE_OFFSET = 4n
+let _STRING_VALUE_OFFSET = 8n
+let _BYTES_SIZE_OFFSET = 4n;
+let _BYTES_VALUE_OFFSET = 8n
+let _CHAR_VALUE_OFFSET = 4n
+
+@disableGC
+export let copyFromLinearMemoryToBytes = (srcPtr: WasmI32, srcPos: Number, dstPos: Number, len: Number, dst: Bytes) => {
+	// based on Bytes.move
+
+	let (+) = WasmI32.add
+	let (>) = WasmI32.gtS
+
+	let dstPtr = WasmI32.fromGrain(dst)
+
+	let srcPosW = coerceNumberToWasmI32(srcPos)
+	let dstPosW = coerceNumberToWasmI32(dstPos)
+	let lenW = coerceNumberToWasmI32(len)
+
+	let dstSizeW = WasmI32.load(dstPtr, _BYTES_SIZE_OFFSET) // or just getSize if in Bytes module
+	if ((dstPosW + lenW) > dstSizeW) {
+		throw InvalidArgument("Invalid destination bytes range")
+	}
+
+	Memory.copy(dstPtr + _BYTES_VALUE_OFFSET + dstPosW, srcPtr + srcPosW, lenW)
+}
+
+@disableGC
+export let writeStringToBytesAsUTF8 = (dstPos: Number, str: String, dst: Bytes) => {
+	// This function could be replaced in the future if this gets adjusted with my suggestion and merged:
+	// https://github.com/grain-lang/grain/pull/683
+
+	let srcPtr = WasmI32.add(WasmI32.fromGrain(str), _STRING_VALUE_OFFSET)
+
+	// like String.byteLength, but without wrapping to Number
+	let size = String.byteLength(str)
+
+	copyFromLinearMemoryToBytes(srcPtr, 0, dstPos, size, dst)
+
+	// return the number of bytes written
+	size
+}
+
+@disableGC
+export let charUTF8SizeInBytes = (c: Char) => {
+	// This is based on Char.toString()
+	let (&) = WasmI32.and
+	let (==) = WasmI32.eq
+
+	let charPtr = WasmI32.fromGrain(c)
+	let byte = WasmI32.load8U(charPtr, 4n)
+	
+	if ((byte & 0x80n) == 0x00n) {
+		1
+	} else if ((byte & 0xF0n) == 0xF0n) {
+		4
+	} else if ((byte & 0xE0n) == 0xE0n) {
+		3
+	} else {
+		2
+	}
+}
+
+@disableGC
+export let numberOfBytesForUTF8CodePoint = (code: Number) => {
+	// based on Char.code()
+
+	let (<=) = WasmI32.leU
+	let (>>>) = WasmI32.shrU
+	let (&) = WasmI32.and
+
+	let code = WasmI32.fromGrain(code)
+	if ((code & 1n) == 0n) {
+		throw InvalidArgument("Invalid character code")
+	}
+
+	let code = code >>> 1n
+
+	if (code <= 0x007Fn) {
+		1
+	} else if (code <= 0x07FFn) {
+		2
+	} else if (code <= 0xFFFFn) {
+		3
+	} else {
+		4
+	}
+}
+
+@disableGC
+export let writeCharToBytesAsUTF8 = (dstPos: Number, c: Char, dst: Bytes) => {
+	let srcPtr = WasmI32.add(WasmI32.fromGrain(c), _CHAR_VALUE_OFFSET)
+
+	let size = charUTF8SizeInBytes(c)
+
+	copyFromLinearMemoryToBytes(srcPtr, 0, dstPos, size, dst)
+
+	// return the number of bytes written
+	size
+}
+
+// This is copied verbatim from Bytes module. Only because not exposed.
+/** Throws an exception if the index specified is out-of-bounds */
+@disableGC
+let checkIndexIsInBounds = (i, byteSize, max) => {
+  let (+) = WasmI32.add
+  let (<) = WasmI32.ltS
+  let (>) = WasmI32.gtS
+  if (i < 0n) {
+    throw Exception.IndexOutOfBounds
+  }
+  if ((i + byteSize) > max) {
+    throw Exception.IndexOutOfBounds
+  }
+}
+
+@disableGC
+export let writeUnicodeCodePointToBytesAsUTF8 = (dstPos: Number, code: Number, dst: Bytes) => {
+	// Reference implementation:
+	// writeCharToBytesAsUTF8(dstPos, Char.fromCode(code), dst) 
+
+	// based on Char.fromCode()
+	let (+) = WasmI32.add
+	let (-) = WasmI32.sub
+	let (*) = WasmI32.mul
+	let (==) = WasmI32.eq
+	let (>) = WasmI32.gtU
+	let (<=) = WasmI32.leU
+	let (<) = WasmI32.ltU
+	let (>>>) = WasmI32.shrU
+	let (&) = WasmI32.and
+	let (|) = WasmI32.or
+
+	let code = WasmI32.fromGrain(code)
+	if ((code & 1n) == 0n) {
+		throw InvalidArgument("Invalid character code")
+	}
+
+	let dstPtr = WasmI32.fromGrain(dst)
+	let mut dstPosW = coerceNumberToWasmI32(dstPos)
+	let mut dstPtrWithInitialOffset = dstPtr + _BYTES_VALUE_OFFSET + dstPosW
+
+	//let bufSize = Bytes.length(dst)
+	//let bufSizeW = coerceNumberToWasmI32(bufSize)
+	let bufSizeW = WasmI32.load(dstPtr, _BYTES_SIZE_OFFSET) // or just getSize if in Bytes module
+
+	let code = code >>> 1n
+	
+	if (code < 0x80n) {
+		checkIndexIsInBounds(dstPosW, 1n, bufSizeW)
+		WasmI32.store8(dstPtrWithInitialOffset, code, 0n)
+
+		1
+	} else {
+		let mut numBytes = 0n
+		let mut count = 0n
+		let mut offset = 0n
+		if (code <= 0x07FFn) {
+			count = 1n
+			offset = 0xC0n
+			numBytes = 2n
+		} else if (code <= 0xFFFFn) {
+			count = 2n
+			offset = 0xE0n
+			numBytes = 3n
+		} else {
+			count = 3n
+			offset = 0xF0n
+			numBytes = 4n
+		}
+		
+		checkIndexIsInBounds(dstPosW, numBytes, bufSizeW)
+
+		WasmI32.store8(dstPtrWithInitialOffset, (code >>> (6n * count)) + offset, 0n)
+
+		let mut n = 0n
+		while (count > 0n) {
+			n += 1n
+			let temp = code >>> (6n * (count - 1n))
+			WasmI32.store8(dstPtrWithInitialOffset + n, 0x80n | (temp & 0x3Fn), 0n)
+			count -= 1n
+		}
+
+		tagSimpleNumber(numBytes)
+	}
 }
