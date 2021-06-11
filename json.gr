@@ -2,8 +2,7 @@ import {
 	getUnicodeCodepointUTF16LowSurrogate,
 	getUnicodeCodepointUTF16HighSurrogate,
 	isFinite,
-	isNaN,
-	coerceNumberToWasmI32
+	isNaN
 } from "stubs"
 import String from "string"
 import Char from "char"
@@ -11,6 +10,7 @@ import Array from "array"
 import StringBuilder from "stringbuilder"
 import Option from "option"
 import NumberUtils from "runtime/numberUtils"
+import Numbers from "runtime/numbers"
 import Memory from "runtime/unsafe/memory"
 import WasmI32 from "runtime/unsafe/wasmi32"
 
@@ -158,7 +158,7 @@ let emitUTF16EscapeSequence = (codePoint: Number, writer: Writer) => {
 	// If we want to absolutely avoid allocations for the hex sequence then
 	// could fork the itoa32 function, but seems a bit of an overkill and
 	// would blow up library size with duplicate code.
-	let asWasmI32 = coerceNumberToWasmI32(codePoint)
+	let asWasmI32 = Numbers.coerceNumberToWasmI32(codePoint)
 	let hex = NumberUtils.itoa32(asWasmI32, 16n)
 	
 	let mut len = String.length(hex)
@@ -294,7 +294,7 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Write
 		JSONNumber(n) => {
 			if (isFinite(n)) {
 				// In order to not duplicate code here I simply use Grain's
-				// toString of Float64. This is a bit risky because as far as I
+				// toString of Number. This is a bit risky because as far as I
 				// can tell what it outputs is not formally documented. So
 				// any changes to that could result in invalid JSON here. For
 				// now at least it was considered the way to go. If one day a

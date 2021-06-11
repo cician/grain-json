@@ -22,6 +22,18 @@ For now you need to have Grain already installed and on the path. Then just laun
 	- [x] Objects
 	- [x] toString
 	- [ ] Simplify and optimize
+		Having parsing working before attempting these optimizations would be nice
+		because it would allow for easier benchmarking.
+		[ ] Switch to using Buffer instead of custom StringWriter solution.
+		    Currently waiting for it to be merged into Grain's stdlib.
+			Whether to keep a StringWriter module at all still TBD.
+		[ ] Maybe reduce allocations.
+			Candidates:
+			- emitUTF16EscapeSequence allocates to make an intermediate hex string
+			- emitEscapedString always allocates an array with String.explode
+			- formatted numbers are converted to intermediate string
+		[ ] Maybe write unicode codepoints for constant strings like "{", "}", ":" etc.
+		    The benefit is measurable but small.
 - [ ] Parsing
 	TBD
 - [x] License
