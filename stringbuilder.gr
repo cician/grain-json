@@ -134,5 +134,6 @@ export let appendUnicodeCodePoint = (code: Number, builder: StringBuilder) => {
 }
 
 export let toString = (builder: StringBuilder) => {
-	Bytes.toString(builder.buffer)
+	//Bytes.toString(builder.buffer)
+	Stubs.bytesToStringRange(0, builder.size, builder.buffer)
 }
