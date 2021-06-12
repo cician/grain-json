@@ -332,20 +332,21 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Write
 			match (elems) {
 				[] => writer.write("[]"),
 				[e] => {
-					writer.write(
-						match (format.arrayFormat) {
-							CompactArrayEntries => "[",
-							OneArrayEntryPerLine => "[ "
-						}
-					)
+					writer.write("[")
+					if (format.arrayFormat == OneArrayEntryPerLine)
+						writer.writeNewLine()
+					
+					if (format.arrayFormat == OneArrayEntryPerLine)
+						printIndentation(format.indentation, writer, indentationLevel+1)
+					
 					err = emitJSONElement(e, format, writer, indentationLevel+1)
+
 					if (Option.isNone(err)) {
-						writer.write(
-							match (format.arrayFormat) {
-								CompactArrayEntries => "]",
-								OneArrayEntryPerLine => " ]"
-							}
-						)
+						if (format.arrayFormat == OneArrayEntryPerLine) {
+							writer.writeNewLine()
+							printIndentation(format.indentation, writer, indentationLevel)
+						}
+						writer.write("]")
 					}
 				},
 				[initialHead, ...initialRest] => {
@@ -399,12 +400,11 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Write
 			match (entries) {
 				[] => writer.write("{}"),
 				[(key, value)] => {
-					writer.write(
-						match (format.objectFormat) {
-							CompactObjectEntries => "{",
-							OneObjectEntryPerLine => "{ "
-						}
-					)
+					writer.writeChar('{')
+					if (format.objectFormat == OneObjectEntryPerLine) {
+						writer.writeNewLine()
+						printIndentation(format.indentation, writer, indentationLevel+1)
+					}
 					
 					emitEscapedQuotedString(key, format, writer)
 					writer.write(
@@ -416,16 +416,15 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Write
 					err = emitJSONElement(value, format, writer, indentationLevel+1)
 
 					if (Option.isNone(err)) {
-						writer.write(
-							match (format.objectFormat) {
-								CompactObjectEntries => "}",
-								OneObjectEntryPerLine => " }"
-							}
-						)
+						if (format.objectFormat == OneObjectEntryPerLine) {
+							writer.writeNewLine()
+							printIndentation(format.indentation, writer, indentationLevel)
+						}
+						writer.writeChar('}')
 					}
 				},
 				[initialHead, ...initialRest] => {
-					writer.write("{")
+					writer.writeChar('{')
 					if (format.objectFormat == OneObjectEntryPerLine)
 						writer.writeNewLine()
 
