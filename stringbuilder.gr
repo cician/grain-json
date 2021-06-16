@@ -88,49 +88,72 @@ export let append = (s: String, builder: StringBuilder) => {
 
 	// Copy the string's content in the buffer offset by current size.
 	let bytesWritten = Stubs.writeStringToBytesAsUTF8(currentSize, s, builder.buffer)
-	assert(bytesWritten == bytesToWrite)
+	// assert(bytesWritten == bytesToWrite)
+
+	// Could replace the stub above with this function recently added to stdlib, but
+	// it's slightly slower because it works bytes by byte even for UTF8.
+	//String.encodeAt(s, String.UTF8, builder.buffer, currentSize)
 
 	builder.size = newSize
 }
 
 export let appendChar = (c: Char, builder: StringBuilder) => {
-	// append(toString(c), builder)
-
-	// Technically this gets computed two times. Here and in writeCharToBytesAsUTF8.
-	// If we want to avoid calculating it two times there are two choices:
-	// a) Just make sure there are always 4 free bytes in the buffer.
-	// b) Incorporate the content of writeCharToBytesAsUTF8 here.
-	let bytesToWrite = Stubs.charUTF8SizeInBytes(c)
-
 	let currentSize = builder.size
 	let currentCapacity = builder.capacity
 
-	let newSize = currentSize + bytesToWrite
+	if (currentSize + 4 <= currentCapacity) {
+		// Add a branch, but avoid a few checks for the most common case of the char fitting into the buffer.
+		// This case of the branch should be used for most calls to appendChar because of exponential allocation of the buffer.
+		let bytesWritten = Stubs.writeCharToBytesAsUTF8(currentSize, c, builder.buffer)
+		
+		let newSize = currentSize + bytesWritten
 
-	// resize if necessary
-	ensureFreeCapacity(bytesToWrite, builder)
+		builder.size = newSize
+	} else {
+		// Technically this gets computed two times. Here and in writeCharToBytesAsUTF8.
+		// If we want to avoid calculating it two times there are two choices:
+		// a) Just make sure there are always 4 free bytes in the buffer.
+		// b) Incorporate the content of writeCharToBytesAsUTF8 here.
+		let bytesToWrite = Stubs.charUTF8SizeInBytes(c)
 
-	let bytesWritten = Stubs.writeCharToBytesAsUTF8(currentSize, c, builder.buffer)
-	assert(bytesWritten == bytesToWrite)
+		// resize if necessary
+		ensureFreeCapacity(bytesToWrite, builder)
+		// ensureFreeCapacity(4, builder)
 
-	builder.size = newSize
+		let bytesWritten = Stubs.writeCharToBytesAsUTF8(currentSize, c, builder.buffer)
+		// assert(bytesWritten == bytesToWrite)
+
+		let newSize = currentSize + bytesWritten
+
+		builder.size = newSize
+	}
 }
 
 export let appendUnicodeCodePoint = (code: Number, builder: StringBuilder) => {
-	let bytesToWrite = Stubs.numberOfBytesForUTF8CodePoint(code)
-
 	let currentSize = builder.size
 	let currentCapacity = builder.capacity
 
-	let newSize = currentSize + bytesToWrite
+	if (currentSize + 4 <= currentCapacity) {
+		let bytesWritten = Stubs.writeUnicodeCodePointToBytesAsUTF8(currentSize, code, builder.buffer)
+		//assert(bytesWritten == bytesToWrite)
 
-	// resize if necessary
-	ensureFreeCapacity(bytesToWrite, builder)
+		let newSize = currentSize + bytesWritten
 
-	let bytesWritten = Stubs.writeUnicodeCodePointToBytesAsUTF8(currentSize, code, builder.buffer)
-	assert(bytesWritten == bytesToWrite)
+		builder.size = newSize
+	} else {
+		let bytesToWrite = Stubs.numberOfBytesForUTF8CodePoint(code)
 
-	builder.size = newSize
+		//resize if necessary
+		ensureFreeCapacity(bytesToWrite, builder)
+		// ensureFreeCapacity(4, builder)
+
+		let bytesWritten = Stubs.writeUnicodeCodePointToBytesAsUTF8(currentSize, code, builder.buffer)
+		// assert(bytesWritten == bytesToWrite)
+
+		let newSize = currentSize + bytesWritten
+
+		builder.size = newSize
+	}
 }
 
 export let toString = (builder: StringBuilder) => {
