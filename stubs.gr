@@ -217,17 +217,3 @@ export let writeUnicodeCodePointToBytesAsUTF8 = (dstPos: Number, code: Number, d
 		tagSimpleNumber(numBytes)
 	}
 }
-
-@disableGC
-export let bytesToStringRange = (start: Number, len: Number, b: Bytes) => {
-	let (+) = WasmI32.add
-	let src = WasmI32.fromGrain(b)
-	let size = Bytes.length(b)
-	let sizeWI32 = coerceNumberToWasmI32(size)
-	let startWI32 = coerceNumberToWasmI32(start)
-	let lenWI32 = coerceNumberToWasmI32(len)
-	checkIndexIsInBounds(startWI32, lenWI32, sizeWI32)
-	let dst = allocateString(lenWI32)
-	Memory.copy(dst + _STRING_VALUE_OFFSET, src + _BYTES_VALUE_OFFSET + startWI32, lenWI32)
-	WasmI32.toGrain(dst): String
-}
