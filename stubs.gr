@@ -3,76 +3,13 @@ This file contains stubs for functions that I think need to be part of Grain's s
 */
 
 import WasmI32 from "runtime/unsafe/wasmi32"
-import WasmI64 from "runtime/unsafe/wasmi64"
-import WasmF32 from "runtime/unsafe/wasmf32"
-import WasmF64 from "runtime/unsafe/wasmf64"
 import Memory from "runtime/unsafe/memory"
 import { tagSimpleNumber, allocateString } from "runtime/dataStructures"
-import {
-	boxedNumberTag,
-	boxedInt32Number,
-	boxedInt64Number,
-	coerceNumberToWasmI32
-} from "runtime/numbers"
+import { coerceNumberToWasmI32 } from "runtime/numbers"
 import String from "string"
 import Exception from "runtime/exception"
 import Tags from "runtime/unsafe/tags"
 import Bytes from "bytes"
-
-// A few functions actually present in the runtime but not exposed,
-// copied here only to implement other stubs.
-
-@disableGC
-let isBoxedNumber = (x) => {
-  if (WasmI32.eq(WasmI32.and(x, Tags._GRAIN_GENERIC_TAG_MASK), Tags._GRAIN_GENERIC_HEAP_TAG_TYPE)) {
-    WasmI32.eq(WasmI32.load(x, 0n), Tags._GRAIN_BOXED_NUM_HEAP_TAG)
-  } else {
-    false
-  }
-}
-
-@disableGC
-export let isFinite = (n: Number) => {
-	let x = WasmI32.fromGrain(n)
-	if (isBoxedNumber(x)) {
-		// Boxed numbers can have many types. Of which float32 and float64 can be infinite,
-		// Grain doesn't allow creating a rational with denominator of zero.
-		let tag = WasmI32.load(x, 4n)
-		if (WasmI32.eq(tag, Tags._GRAIN_FLOAT32_BOXED_NUM_TAG)) {
-			let wf32 = WasmF32.load(x, 8n)
-			WasmF32.eq(WasmF32.sub(wf32, wf32), 0.w)
-		} else if (WasmI32.eq(tag, Tags._GRAIN_FLOAT64_BOXED_NUM_TAG)) {
-			let wf64 = WasmF64.load(x, 8n)
-			WasmF64.eq(WasmF64.sub(wf64, wf64), 0.W)
-		} else {
-			true
-		}
-	} else {
-		// Simple numbers are integers and cannot be infinite.
-		true
-	}
-}
-
-@disableGC
-export let isNaN = (n: Number) => {
-	let x = WasmI32.fromGrain(n)
-	if (isBoxedNumber(x)) {
-		// Boxed numbers can have many types. Of which float32 and float64 can be NaN,
-		let tag = WasmI32.load(x, 4n)
-		if (WasmI32.eq(tag, Tags._GRAIN_FLOAT32_BOXED_NUM_TAG)) {
-			let wf32 = WasmF32.load(x, 8n)
-			WasmF32.ne(wf32, wf32)
-		} else if (WasmI32.eq(tag, Tags._GRAIN_FLOAT64_BOXED_NUM_TAG)) {
-			let wf64 = WasmF64.load(x, 8n)
-			WasmF64.ne(wf64, wf64)
-		} else {
-			false
-		}
-	} else {
-		// Simple numbers are integers and cannot be NaN.
-		false
-	}
-}
 
 let _MIN_LOW_SURROGATE = 0xDC00
 let _MIN_HIGH_SURROGATE = 0xD800

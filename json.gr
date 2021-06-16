@@ -1,14 +1,13 @@
 import {
 	getUnicodeCodepointUTF16LowSurrogate,
-	getUnicodeCodepointUTF16HighSurrogate,
-	isFinite,
-	isNaN
+	getUnicodeCodepointUTF16HighSurrogate
 } from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
 import StringBuilder from "stringbuilder"
 import Option from "option"
+import Number from "number"
 import NumberUtils from "runtime/numberUtils"
 import Numbers from "runtime/numbers"
 import Memory from "runtime/unsafe/memory"
@@ -292,7 +291,7 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Write
 		JSONBoolean(b) => writer.write(if (b) "true" else "false"),
 
 		JSONNumber(n) => {
-			if (isFinite(n)) {
+			if (Number.isFinite(n)) {
 				// In order to not duplicate code here I simply use Grain's
 				// toString of Number. This is a bit risky because as far as I
 				// can tell what it outputs is not formally documented. So
@@ -311,7 +310,7 @@ let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Write
 				// directly. Other possible choices were to throw exceptions or to
 				// coninue formatting without representing these values correctly
 				// (like JavaScript's JSON.stringify).
-				if (isNaN(n)) {
+				if (Number.isNaN(n)) {
 					err = Some(InvalidJSON("NaN is not allowed in JSONNumber"))
 				} else if (n < 0) {
 					err = Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
