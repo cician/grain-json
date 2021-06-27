@@ -11,26 +11,6 @@ import Exception from "runtime/exception"
 import Tags from "runtime/unsafe/tags"
 import Bytes from "bytes"
 
-let _MIN_LOW_SURROGATE = 0xDC00
-let _MIN_HIGH_SURROGATE = 0xD800
-
-export let getUnicodeCodepointUTF16LowSurrogate = (codePoint: Number) => {
-	// The content of this function is based on code from the .NET runtime
-	// (MIT licensed).
-	(codePoint & 0x3FF) + _MIN_LOW_SURROGATE
-}
-
-
-export let getUnicodeCodepointUTF16HighSurrogate = (codePoint: Number) => {
-	// The content of this function is based on code from the .NET runtime
-	// (MIT licensed).
-	(codePoint + ((_MIN_HIGH_SURROGATE - 0x40) << 10)) >> 10
-}
-
-export let unicodeCodepointToUTF16SurrogatePair = (codePoint: Number) => {
-	(getUnicodeCodepointUTF16LowSurrogate(codePoint), getUnicodeCodepointUTF16HighSurrogate(codePoint))
-}
-
 let _STRING_SIZE_OFFSET = 4n
 let _STRING_VALUE_OFFSET = 8n
 let _BYTES_SIZE_OFFSET = 4n;

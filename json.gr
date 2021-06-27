@@ -1,17 +1,9 @@
-import {
-	getUnicodeCodepointUTF16LowSurrogate,
-	getUnicodeCodepointUTF16HighSurrogate
-} from "stubs"
 import String from "string"
 import Char from "char"
 import Array from "array"
 import StringBuilder from "stringbuilder"
 import Option from "option"
 import Number from "number"
-import NumberUtils from "runtime/numberUtils"
-import Numbers from "runtime/numbers"
-import Memory from "runtime/unsafe/memory"
-import WasmI32 from "runtime/unsafe/wasmi32"
 
 export enum JSON {
 	JSONNull,
@@ -147,39 +139,66 @@ let printIndentation = (indentation: IndentationFormat, writer: Writer, indentat
 	}
 }
 
-@disableGC
 let emitUTF16EscapeSequence = (codePoint: Number, writer: Writer) => {
-	// if (codePoint < 0n || codePoint > 0xFFFFn)
-	// 	throw InvalidArgument("emitUTF16EscapeSequence() codePoint must be between 0 and 0xFFFF")
+	// Emit the "\u" followed by hexadecimal representation of the codepoint
+	// with fixed length of 4 hexadecimal digits correspondeing to the two byte
+	// codepoint. No checks are performed here if the codepoint is in the
+	// "Basic Multilingual Plane" (0000-FFFF) as this funcion is only called
+	// internally.
+	// An alternative was to this implementation was to use NumberUtils.itoa32,
+	// but I wanted to avoid unnecessary heap allocations. As a possible future
+	// optimization this loop could be unrolled possibly even converted to be
+	// branchless and SIMD optimized, but it could be a bit of an overkill as
+	// this codepath is only for escape sequences, which probably aren't all
+	// that common occurence.
 
 	writer.write("\\u");
+	// Loop over the four digit from most to least significant.
+	for (let mut digitIndex=3; digitIndex>=0; digitIndex -= 1) {
+		// Use bit masking and shifting to extract from the codepoint a number
+		// with just the bits corresponding to this hexadecinak digit.
+		let shift = digitIndex * 4
+		let mask = 0b1111 << shift
+		let digit = (codePoint & mask) >>> shift
 
-	// If we want to absolutely avoid allocations for the hex sequence then
-	// could fork the itoa32 function, but seems a bit of an overkill and
-	// would blow up library size with duplicate code.
-	let asWasmI32 = Numbers.coerceNumberToWasmI32(codePoint)
-	let hex = NumberUtils.itoa32(asWasmI32, 16n)
-	
-	let mut len = String.length(hex)
-	while (len < 4) {
-		writer.writeChar('0')
-		len += 1;
+		// Digit now is a number in the range 0..15 and we need to translate it
+		// into a unicode codepoint representing the hexacedimal digit
+		// (0..9/a..f). We can use the fact that digits and latin letters in
+		// ASCII and by extension in Unicode are adjacent and ordered.
+		let hexDigitCodePoint =
+			if (digit <= 9) {
+				// 48 is codeppoint for char '0'
+				digit + 48
+			} else {
+				// 97 is codeppoint for char 'a'
+				// But we also need to subtract 10 from it because we need
+				// the 10..15 number range translated to 0..5 in order to
+				// serve as an index in the ASCI range 'a'..'f'.
+				digit + 87
+			}
+
+		writer.writeUnicodeCodePoint(hexDigitCodePoint)
 	}
-	writer.write(hex);
-
-	Memory.free(WasmI32.fromGrain(hex))
 }
 
 let emitEscapedUnicodeSequence = (codePoint: Number, writer: Writer) => {
 	// See the String section in the ECMA-404 doc.
-	// If the code point is "in the Basic Multilingual Plane", that is
-	// in range 0..65535. Greater values need to be split into two
-	// UTF-16 chunks.
+	// If the code point is "in the Basic Multilingual Plane", that is in range
+	// 0..65535. Greater values need to be split into two UTF-16 chunks.
 	if (codePoint <= 0xFFFF) {
 		emitUTF16EscapeSequence(codePoint, writer)
 	} else {
-		let highSurrogate = getUnicodeCodepointUTF16HighSurrogate(codePoint)
-		let lowSurrogate = getUnicodeCodepointUTF16LowSurrogate(codePoint)
+		// The following three lines are copied from String module of Grain's
+		// stdlib. It would be nice to share more code. On the other hand it
+		// may make sense to juste have these few instructions directly here
+		// from the performance standpoint so we can print millions of emojis
+		// per second 😄.
+
+		// https://en.wikipedia.org/wiki/UTF-16#Code_points_from_U+010000_to_U+10FFFF
+		let uPrime = codePoint - 0x10000
+		let highSurrogate = ((uPrime & 0b11111111110000000000) >>> 10) + 0xD800 // High surrogate
+		let lowSurrogate = (uPrime & 0b00000000001111111111) + 0xDC00 // Low surrogate
+
 		emitUTF16EscapeSequence(highSurrogate, writer)
 		emitUTF16EscapeSequence(lowSurrogate, writer)
 	}
@@ -505,17 +524,28 @@ let makeWriter = (buf: StringBuilder.StringBuilder, lineEnding: LineEnding) => {
 	} : Writer
 }
 
+let makeDummyWriter = () => {
+	{
+		write: s => void,
+		writeChar: c => void,
+		writeUnicodeCodePoint: c => void,
+		writeNewLine: () => void,
+	} : Writer
+}
+
 export let toString = (json: JSON, format: FormattingSettings) => {
 	// If we want to be smart about limiting allocations it may make sense to
 	// guesstimate the capacity by traversing the json .
 	let buf = StringBuilder.make(16)
 
 	let writer = makeWriter(buf, format.lineEnding)
+	// let writer = makeDummyWriter()
 
 	let error = emitJSON(json, format, writer)
 
 	match (error) {
 		None => Ok(StringBuilder.toString(buf)),
+		// None => Ok(""),
 		Some(e) => Err(e)
 	}
 }
