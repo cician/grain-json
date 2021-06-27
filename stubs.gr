@@ -99,6 +99,7 @@ export let numberOfBytesForUTF8CodePoint = (code: Number) => {
 	// based on Char.code()
 
 	let (<=) = WasmI32.leU
+	let (==) = WasmI32.eq
 	let (>>>) = WasmI32.shrU
 	let (&) = WasmI32.and
 
