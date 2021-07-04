@@ -4,6 +4,7 @@ import Array from "array"
 import StringBuilder from "stringbuilder"
 import Option from "option"
 import Number from "number"
+import Stubs from "stubs"
 
 export enum JSON {
 	JSONNull,
@@ -19,6 +20,8 @@ export enum JSON {
 	// processing. This also vastly simplifies implementation and has the benefit of List's immutability.
 	JSONObject(List<(String,JSON)>)
 }
+
+export exception InvalidJSON(String)
 
 export enum IndentationFormat {
 	NoIndentation,
@@ -112,34 +115,41 @@ export let defaultPrettyAndSafeFormat =
 		escapeNonASCII: true
 	} : FormattingSettings
 
-record Writer {
+// Abstract target for printing text.
+// If the decision is made to never do anything other than emitting
+// to a String then it should be removed for slightly better efficiency and less complexity.
+// For now it's useful to me to measure performance separately from the cost of printing.
+record Printer {
 	write: String -> Void,
 	writeChar: Char -> Void,
 	writeUnicodeCodePoint: Number -> Void,
-	writeNewLine: () -> Void
 }
 
-let printIndentation = (indentation: IndentationFormat, writer: Writer, indentationLevel: Number) => {
-	match (indentation) {
-		IndentWithTab => {
-			let mut count = 0
-			while (count < indentationLevel) {
-				writer.writeChar('\t')
-				count += 1;
-			}
-		},
-		IndentWithSpaces(spacesPerIndentation) => {
-			let mut count = 0
-			while (count < indentationLevel*spacesPerIndentation) {
-				writer.writeChar(' ')
-				count += 1;
-			}
-		},
-		NoIndentation => void
-	}
+// The idea for this type is to allow reusing a bit of work done in preparing for printing JSON.
+// For now this is not exposed and remains an internal implementation detail.
+record JSONWriter {
+	emit: JSON -> Option<Exception>,
 }
 
-let emitUTF16EscapeSequence = (codePoint: Number, writer: Writer) => {
+let makeStringBuilderPrinter = (buf: StringBuilder.StringBuilder) => {
+	{
+		write: s => StringBuilder.append(s, buf),
+		writeChar: c => StringBuilder.appendChar(c, buf),
+		writeUnicodeCodePoint: (c) => {
+			StringBuilder.appendUnicodeCodePoint(c, buf)
+		}
+	} : Printer
+}
+
+let makeDummyPrinter = () => {
+	{
+		write: s => void,
+		writeChar: c => void,
+		writeUnicodeCodePoint: c => void,
+	} : Printer
+}
+
+let emitUTF16EscapeSequence = (codePoint: Number, printer: Printer) => {
 	// Emit the "\u" followed by hexadecimal representation of the codepoint
 	// with fixed length of 4 hexadecimal digits correspondeing to the two byte
 	// codepoint. No checks are performed here if the codepoint is in the
@@ -152,7 +162,9 @@ let emitUTF16EscapeSequence = (codePoint: Number, writer: Writer) => {
 	// this codepath is only for escape sequences, which probably aren't all
 	// that common occurence.
 
-	writer.write("\\u");
+	//printer.write("\\u");
+	printer.writeUnicodeCodePoint(92)
+	printer.writeUnicodeCodePoint(117)
 	// Loop over the four digit from most to least significant.
 	for (let mut digitIndex=3; digitIndex>=0; digitIndex -= 1) {
 		// Use bit masking and shifting to extract from the codepoint a number
@@ -177,16 +189,17 @@ let emitUTF16EscapeSequence = (codePoint: Number, writer: Writer) => {
 				digit + 87
 			}
 
-		writer.writeUnicodeCodePoint(hexDigitCodePoint)
+		printer.writeUnicodeCodePoint(hexDigitCodePoint)
 	}
 }
 
-let emitEscapedUnicodeSequence = (codePoint: Number, writer: Writer) => {
+let emitEscapedUnicodeSequence = (codePoint: Number, printer: Printer) => {
 	// See the String section in the ECMA-404 doc.
 	// If the code point is "in the Basic Multilingual Plane", that is in range
 	// 0..65535. Greater values need to be split into two UTF-16 chunks.
 	if (codePoint <= 0xFFFF) {
-		emitUTF16EscapeSequence(codePoint, writer)
+		// emitUTF16EscapeSequence(codePoint, writer)
+		emitUTF16EscapeSequence(codePoint, printer)
 	} else {
 		// The following three lines are copied from String module of Grain's
 		// stdlib. It would be nice to share more code. On the other hand it
@@ -199,357 +212,703 @@ let emitEscapedUnicodeSequence = (codePoint: Number, writer: Writer) => {
 		let highSurrogate = ((uPrime & 0b11111111110000000000) >>> 10) + 0xD800 // High surrogate
 		let lowSurrogate = (uPrime & 0b00000000001111111111) + 0xDC00 // Low surrogate
 
-		emitUTF16EscapeSequence(highSurrogate, writer)
-		emitUTF16EscapeSequence(lowSurrogate, writer)
+		// emitUTF16EscapeSequence(highSurrogate, writer)
+		emitUTF16EscapeSequence(highSurrogate, printer)
+		// emitUTF16EscapeSequence(lowSurrogate, writer)
+		emitUTF16EscapeSequence(lowSurrogate, printer)
 	}
 }
 
-// Escapes the provided string and emits the result char by char with the emit function.
-let emitEscapedString = (s: String, format: FormattingSettings, writer: Writer) => {
-	// Escape the string.
-	// Probably a good candidate for low level optimization.
-	// Mostly to avoid allocating the char array.
-	// Also doesn't grain allow matching on numbers?
-	let chars = String.explode(s)
-	let mut i = 0
-	let len = Array.length(chars)
-	let mut prevChar = '\u0000';
-	let mut char = '\u0000';
-	while (i < len) {
-		char = chars[i];
+let emitEscapedCodePoint = (codePoint: Number, printer: Printer) => {
+	match (codePoint) {
+		0x0008 => { // backspace
+			//printer.write("\\b")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x62)
+		},
+		0x0009 => { // tab
+			//printer.write("\\t")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x74)
+		},
+		0x000A => { // line feed
+			//printer.write("\\n")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x6E)
+		},
+		0x000C => { // form feed
+			//printer.write("\\f")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x66)
+		},
+		0x000D => { // carriage return
+			//printer.write("\\r")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x72)
+		},
+		0x0022 => { // quotation mark
+			//printer.write("\\\"")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x22)
+		},
+		0x005C => { // backslash or "Reverse Solidus"
+			//printer.write("\\\\")
+			printer.writeUnicodeCodePoint(0x5C)
+			printer.writeUnicodeCodePoint(0x5C)
+		},
+		_ => {
+			emitEscapedUnicodeSequence(codePoint, printer)
+		}
+	}
+}
 
-		match (char) {
-			'\u0008' => writer.write("\\b"), // backspace
-			'\u0009' => writer.write("\\t"), // tab
-			'\u000A' => writer.write("\\n"), // line feed
-			'\u000C' => writer.write("\\f"), // form feed
-			'\u000D' => writer.write("\\r"), // carriage return
-			'\u0022' => writer.write("\\\""), // quotation mark
-			'\u005C' => writer.write("\\\\"), // backslash or "Reverse Solidus"
-			//c => emit(toString(c))
-			c => {
-				let codePoint = Char.code(char);
+let printNull = (printer: Printer) => printer.write("null")
 
-				/*
-				if (codePoint == 8) { // backspace
-					emit("\\b")
-				} else if (codePoint == 9) { // tab
-					emit("\\t")
-				} else if (codePoint == 10) { // line feed
-					emit("\\n")
-				} else if (codePoint == 12) { // form feed
-					emit("\\f")
-				} else if (codePoint == 13) { // carriage return
-					emit("\\r")
-				} else if (codePoint == 34) { // quotation mark
-					emit("\\\"")
-				} else if (codePoint == 92) { // backspace
-					emit("\\\\")
-				}
-				*/
+let printBool = (b: Bool, printer: Printer) => printer.write(if (b) "true" else "false")
+
+let printNumber = (n: Number, printer: Printer) => {
+	if (Number.isFinite(n)) {
+		// In order to not duplicate code here I simply use Grain's
+		// toString of Number. This is a bit risky because as far as I
+		// can tell what it outputs is not formally documented. So
+		// any changes to that could result in invalid JSON here. For
+		// now at least it was considered the way to go. If one day a
+		// decision is made to fork that function. The starting point
+		// would be NumberUtils.dtoa and some optimizations could
+		// probably be done like avoiding memory allocations or
+		// checking for NaNs/Infs two times.
+		// FIXME normalize rational numbers
+		printer.write(toString(n))
+		None
+	} else {
+		// JSON standard doesn't allow NaN or infinite values in numbers,
+		// but WASM f64 (IEEE 754-2008), as well as Grain's number types do
+		// (Float64 as well as Number). This is the only reason that the
+		// formatting needs to return a Result and not just a String
+		// directly. Other possible choices were to throw exceptions or to
+		// coninue formatting without representing these values correctly
+		// (like JavaScript's JSON.stringify).
+		if (Number.isNaN(n)) {
+			Some(InvalidJSON("NaN is not allowed in JSONNumber"))
+		} else if (n < 0) {
+			Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
+		} else {
+			Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
+		}
+	}
+}
+
+let makeCompactJSONWriter = (printer: Printer) => {
+	// As an optimization prepare a closure function to execute for each code
+	// point of the input. It's important that this is not inlide in the
+	// emitEscapedQuotedString function directly to avoid allocating the closue
+	// for each input string.
+	let emitEscapedCodePoint = (codePoint: Number) => {
+		// For the compact formatting only escape code points 0..31 as required
+		// by ECMA-404 (the so called "C0" control point group). For the non
+		// pretty printed case we don't want to escape more than what is
+		// stricty required to avoid increasing the output size.
+		if (codePoint > 31) {
+			printer.writeUnicodeCodePoint(codePoint)
+		} else {
+			emitEscapedCodePoint(codePoint, printer)
+		}
+	}
+	
+	let emitEscapedQuotedString = (s: String) => {
+		//printer.write("\"")
+		printer.writeUnicodeCodePoint(0x22)
+
+		// If/when my PR gets merget hopefully this will be String.forEachCodePoint without need for intermediate allocations.
+		Stubs.forEachCodePoint(emitEscapedCodePoint, s)
+
+		//printer.write("\"")
+		printer.writeUnicodeCodePoint(0x22)
+	}
+
+	let rec printElement = (json: JSON) => {
+		match (json) {
+			JSONNull => {
+				printNull(printer)
+				None
+			},
+			JSONBoolean(b) => {
+				printBool(b, printer)
+				None
+			},
+			JSONNumber(n) => printNumber(n, printer),
+			JSONString(s) => {
+				emitEscapedQuotedString(s)
+				None
+			},
+			JSONArray(elems) => {
+				// Here I'm not using List.forEachi or similar in order to avoid allocations of closures.
+				// The code is verbose and a bit ugly as a consequence, but I think it's an OK price for
+				// [presumed] performance gain. Another approach would be to allocate a function for
+				// formattng arrays just once at the start of formatting and pass it in emitJSONElement.
 				
-				if (codePoint >= 0 && codePoint <= 31) {
-					// ASCII or "C0" control point group, except 127, handled separately.
-					// The ECMA-404 spec only requires to escape the control point codes 0-31,
-					// But it may be desirable to escape other control points or even everything
-					// other than printable ASCII characters for compatiblity, easier transport,
-					// embedding etc. Thus I've decided to expose options for this, but otherwise
-					// just a sane default would suffice.
-					emitEscapedUnicodeSequence(codePoint, writer)
-				} else if (codePoint >= 127 && codePoint <= 159 && format.escapeAllControlPoints) {
-					// ASCII control point 127 and unicode control point group C1 (128-159)
-					emitEscapedUnicodeSequence(codePoint, writer)
+				match (elems) {
+					[] => {
+						//printer.write("[]")
+						printer.writeUnicodeCodePoint(0x5B)
+						printer.writeUnicodeCodePoint(0x5D)
+						None
+					},
+					[e] => {
+						//printer.write("[")
+						printer.writeUnicodeCodePoint(0x5B)
+					
+						let err = printElement(e)
 
-					// There could be more control points or otherwise escape worthy codepoints,
-					// but covering that would be overkill. For everything outside of the ASCII
-					// range the user has to decide whether to escape all unicode codepoint or
-					// nothing, including the .
-				} else if (codePoint >= 128 && format.escapeNonASCII) {
-					// If the user chooses to do so, escape all non ASCII code points.
-					emitEscapedUnicodeSequence(codePoint, writer)
-				} else if (char == '/' && format.escapeHTMLUnsafeSequences) {
-					// Additionally many JSON libraries escape additional two character sequences for
-					// direct embedding into html for example. This is specifically to avoid emitting
-					// the sequence "</" like in "</script>".
-					// The lazy approach would be to just escape the slash (which can become "\\/",
-					// not necessarily "\u002F"). This more conservative approach only escapes it
-					// when needed.
-					if (prevChar == '<') {
-						writer.write("\\/")
-					} else {
-						// otherwise just emit the slash as-is
-						writer.writeChar('/')
+						if (Option.isNone(err)) {
+							//printer.write("]")
+							printer.writeUnicodeCodePoint(0x5D)
+						}
+
+						err
+					},
+					[initialHead, ...initialRest] => {
+						// printer.write("[")
+						printer.writeUnicodeCodePoint(0x5B)
+
+						let mut currentHead = initialHead
+						let mut currentRest = initialRest
+
+						let mut err = None
+
+						for (let mut index = 0; ; index += 1) {
+							if (index > 0) {
+								// printer.write(",")
+								printer.writeUnicodeCodePoint(0x2C)
+							}
+
+							err = printElement(currentHead)
+							if (Option.isSome(err))
+								break
+
+							match (currentRest) {
+								[] => break,
+								[newHead, ...newRest] => {
+									currentHead = newHead
+									currentRest = newRest
+								}
+							}
+						}
+
+						if (Option.isNone(err)) {
+							// printer.write("]")
+							printer.writeUnicodeCodePoint(0x5D)
+						}
+
+						err
 					}
-				} else {
-					writer.writeUnicodeCodePoint(codePoint)
+				}
+			},
+			JSONObject(entries) => {
+				match (entries) {
+					[] => {
+						// printer.write("{}")
+						printer.writeUnicodeCodePoint(0x7B)
+						printer.writeUnicodeCodePoint(0x7D)
+
+						None
+					},
+					[(key, value)] => {
+						//printer.writeChar('{')
+						printer.writeUnicodeCodePoint(0x7B)
+						
+						emitEscapedQuotedString(key)
+
+						//printer.writeChar(':')
+						printer.writeUnicodeCodePoint(0x3A)
+
+						let err = printElement(value)
+
+						if (Option.isNone(err)) {
+							// printer.writeChar('}')
+							printer.writeUnicodeCodePoint(0x7D)
+						}
+						
+						err
+					},
+					[initialHead, ...initialRest] => {
+						// printer.writeChar('{')
+						printer.writeUnicodeCodePoint(0x7B)
+
+						let mut currentHead = initialHead
+						let mut currentRest = initialRest
+
+						let mut err = None
+
+						for (let mut index = 0; ; index += 1) {
+							if (index > 0) {
+								// printer.write(",")
+								printer.writeUnicodeCodePoint(0x2C)
+							}
+
+							let (key, value) = currentHead
+							
+							emitEscapedQuotedString(key)
+
+							//printer.writeChar(':')
+							printer.writeUnicodeCodePoint(0x3A)
+							
+							err = printElement(value)
+
+							if (Option.isSome(err))
+								break
+
+							match (currentRest) {
+								[] => break,
+								[newHead, ...newRest] => {
+									currentHead = newHead
+									currentRest = newRest
+								}
+							}
+						}
+
+						if (Option.isNone(err)) {
+							// printer.writeChar('}')
+							printer.writeUnicodeCodePoint(0x7D)
+						}
+
+						err
+					}
 				}
 			}
 		}
-
-		i += 1;
-		prevChar = char;
 	}
+
+	{
+		emit: printElement,
+	} : JSONWriter
 }
 
-let emitEscapedQuotedString = (s: String, format: FormattingSettings, writer: Writer) => {
-	writer.write("\"")
-	emitEscapedString(s, format, writer)
-	writer.write("\"")
-}
-
-export exception InvalidJSON(String)
-
-// FIXME can't define explicit type for the emit parameter
-// or am I doing something wrong?
-let rec emitJSONElement = (json: JSON, format: FormattingSettings, writer: Writer, indentationLevel: Number) => {
-	let mut err = None : Option<Exception>;
-
-	match (json) {
-		JSONNull => writer.write("null"),
-
-		JSONBoolean(b) => writer.write(if (b) "true" else "false"),
-
-		JSONNumber(n) => {
-			if (Number.isFinite(n)) {
-				// In order to not duplicate code here I simply use Grain's
-				// toString of Number. This is a bit risky because as far as I
-				// can tell what it outputs is not formally documented. So
-				// any changes to that could result in invalid JSON here. For
-				// now at least it was considered the way to go. If one day a
-				// decision is made to fork that function. The starting point
-				// would be NumberUtils.dtoa and some optimizations could
-				// probably be done like avoiding memory allocations or
-				// checking for NaNs/Infs two times.
-				writer.write(toString(n))
-			} else {
-				// JSON standard doesn't allow NaN or infinite values in numbers,
-				// but WASM f64 (IEEE 754-2008), as well as Grain's number types do
-				// (Float64 as well as Number). This is the only reason that the
-				// formatting needs to return a Result and not just a String
-				// directly. Other possible choices were to throw exceptions or to
-				// coninue formatting without representing these values correctly
-				// (like JavaScript's JSON.stringify).
-				if (Number.isNaN(n)) {
-					err = Some(InvalidJSON("NaN is not allowed in JSONNumber"))
-				} else if (n < 0) {
-					err = Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
-				} else {
-					err = Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
-				}
+let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) => {
+	let printNewLine = match (format.lineEnding) {
+		NoLineEnding => () => void,
+		LineFeed => () => {
+			//printer.writeChar('\n')
+			printer.writeUnicodeCodePoint(0x0A)
+		},
+		CarriageReturnLineFeed => () => {
+			//printer.write("\r\n")
+			printer.writeUnicodeCodePoint(0x0D)
+			printer.writeUnicodeCodePoint(0x0A)
+		},
+		CarriageReturn => () => {
+			//printer.writeChar('\r')
+			printer.writeUnicodeCodePoint(0x0D)
+		},
+	}
+	
+	let printIndentation = match (format.indentation) {
+		IndentWithTab => (indentationLevel) => {
+			let mut count = 0
+			while (count < indentationLevel) {
+				//printer.writeChar('\t')
+				printer.writeUnicodeCodePoint(0x09)
+				count += 1;
 			}
 		},
+		IndentWithSpaces(spacesPerIndentation) => (indentationLevel) => {
+			let mut count = 0
+			let spaceCount = indentationLevel*spacesPerIndentation
+			while (count < spaceCount) {
+				//printer.writeChar(' ')
+				printer.writeUnicodeCodePoint(0x20)
+				count += 1;
+			}
+		},
+		NoIndentation => (indentationLevel) => void
+	}
 
-		JSONString(s) => emitEscapedQuotedString(s, format, writer),
+	// As an optimization prepare a different closure function for each
+	// combination of escaping options. This ways we can avoid unnecessary
+	// branching in the code executed for each character. What is most
+	// important here is to optimize for the non pretty printed format as this
+	// is where the performance is most likely to matter. In every case escape
+	// code points 0..31 as required by ECMA-404 (the so called "C0" control
+	// point group). For the non pretty printed case we don't want to escape
+	// more than what is stricty required to avoid increasing the output size.
+	// But for pretty printing or compatiblity it may be desirable to escape
+	// other control points or even everything other than printable ASCII
+	// characters. Thus I've decided to expose options for this, but otherwise
+	// just a sane default would suffice.
+	// Additionally many JSON libraries escape additional two character
+	// sequences for direct embedding into html for example. This is
+	// specifically to avoid emitting the sequence "</" like in "</script>".
+	// The lazy approach would be to just escape the slash (which can become
+	// "\\/", not necessarily "\u002F"). This more conservative approach only
+	// escapes it when needed, but requires to keep track of the previous code
+	// point in the iteration so it's more complicated and handled separately.
+	let emitEscapedCodePoint =
+		if (!format.escapeAllControlPoints && !format.escapeNonASCII) {
+			(codePoint: Number) => {
+				if (codePoint > 31) {
+					printer.writeUnicodeCodePoint(codePoint)
+				} else {
+					emitEscapedCodePoint(codePoint, printer)
+				}
+			}
+		} else if (!format.escapeAllControlPoints && format.escapeNonASCII) {
+			// If desired, escape all non ASCII code points. So the only non
+			// escaped code points are those in the range of ASCII chacarcters
+			// from 31 to 127.
+			(codePoint: Number) => {
+				if (codePoint > 31 && codePoint < 128 ) {
+					printer.writeUnicodeCodePoint(codePoint)
+				} else {
+					emitEscapedCodePoint(codePoint, printer)
+				}
+			}
+		} else if (format.escapeAllControlPoints && !format.escapeNonASCII) {
+			// If desired, in addition to the required 0..31 control points,
+			// also escape unicode control point group C1 (128-159).
+			// There could be more control points or otherwise escape worthy
+			// codepoints, but covering that would be overkill.
+			(codePoint: Number) => {
+				if ((codePoint > 31 && codePoint < 127) || codePoint > 159) {
+					printer.writeUnicodeCodePoint(codePoint)
+				} else {
+					emitEscapedCodePoint(codePoint, printer)
+				}
+			}
+		} else {
+			// And this is just the combination of both flags, which means
+			// doing almost the same as for the case above for
+			// escapeNonASCII=true, but also escape the ASCII control codepoint
+			// 127 (Delete).
+			(codePoint: Number) => {
+				if (codePoint > 31 && codePoint < 127) {
+					// fast path for chars that never need any escaping
+					printer.writeUnicodeCodePoint(codePoint)
+				} else {
+					emitEscapedCodePoint(codePoint, printer)
+				}
+			}
+		}
+	
+	let emitEscapedQuotedString =
+		if (!format.escapeHTMLUnsafeSequences) {
+			(s: String) => {
+				//printer.write("\"")
+				printer.writeUnicodeCodePoint(0x22)
 
-		JSONArray(elems) => {
-			// Here I'm not using List.forEachi or similar in order to avoid allocations of closures.
-			// The code is verbose and a bit ugly as a consequence, but I think it's an OK price for
-			// [presumed] performance gain. Another approach would be to allocate a function for
-			// formattng arrays just once at the start of formatting and pass it in emitJSONElement.
-			
-			match (elems) {
-				[] => writer.write("[]"),
-				[e] => {
-					writer.write("[")
-					if (format.arrayFormat == OneArrayEntryPerLine)
-						writer.writeNewLine()
-					
-					if (format.arrayFormat == OneArrayEntryPerLine)
-						printIndentation(format.indentation, writer, indentationLevel+1)
-					
-					err = emitJSONElement(e, format, writer, indentationLevel+1)
+				// Note that it's important for performance that the closure passed to forEachCodePoint
+				// is not allocated inline here, but just once when creating the writer.
+				
+				// If/when my PR gets merget hopefully this will be String.forEachCodePoint without need for intermediate allocations.
+				Stubs.forEachCodePoint(emitEscapedCodePoint, s)
 
-					if (Option.isNone(err)) {
-						if (format.arrayFormat == OneArrayEntryPerLine) {
-							writer.writeNewLine()
-							printIndentation(format.indentation, writer, indentationLevel)
+				//printer.write("\"")
+				printer.writeUnicodeCodePoint(0x22)
+			}
+		} else {
+			// Special handling for the escapeHTMLUnsafeSequences flag.
+			// Escaping a sequence requires keeping track of previous characters,
+			// which is difficult and suboptimal when using a function to iterate
+			// the input string. So we don't want to pay the price in other cases.
+			// This cannot be done just in the emitEscapedCodePoint function.
+			// It could be possible to implement more optimally, but would
+			// complicate things even more than this.
+			(s: String) => {
+				printer.writeUnicodeCodePoint(0x22)
+
+				let mut prevCodePoint = 0
+
+				Stubs.forEachCodePoint((codePoint) => {
+					if (codePoint == 47) {
+						if (format.escapeHTMLUnsafeSequences && prevCodePoint == 60) {
+							//printer.write("\\/")
+							printer.writeUnicodeCodePoint(92)
+							printer.writeUnicodeCodePoint(47)
+						} else {
+							// otherwise just emit the slash as-is
+							//printer.writeChar('/')
+							printer.writeUnicodeCodePoint(codePoint)
 						}
-						writer.write("]")
+					} else {
+						emitEscapedCodePoint(codePoint)
 					}
-				},
-				[initialHead, ...initialRest] => {
-					writer.write("[")
-					if (format.arrayFormat == OneArrayEntryPerLine)
-						writer.writeNewLine()
 
-					let mut currentHead = initialHead
-					let mut currentRest = initialRest
+					prevCodePoint = codePoint;
+				}, s)
 
-					for (let mut index = 0; ; index += 1) {
-						if (index > 0) {
-							writer.write(",")
-							if (format.arrayFormat == OneArrayEntryPerLine)
-								writer.writeNewLine()
-						}
+				printer.writeUnicodeCodePoint(0x22)
+			}
+		}
+
+	let rec printElement = (json: JSON, indentationLevel: Number) => {
+		match (json) {
+			JSONNull => {
+				printNull(printer)
+				None
+			},
+			JSONBoolean(b) => {
+				printBool(b, printer)
+				None
+			},
+			JSONNumber(n) => printNumber(n, printer),
+			JSONString(s) => {
+				emitEscapedQuotedString(s)
+				None
+			},
+			JSONArray(elems) => {
+				match (elems) {
+					[] => {
+						//printer.write("[]")
+						printer.writeUnicodeCodePoint(0x5B)
+						printer.writeUnicodeCodePoint(0x5D)
+						None
+					},
+					[e] => {
+						//printer.write("[")
+						printer.writeUnicodeCodePoint(0x5B)
 
 						if (format.arrayFormat == OneArrayEntryPerLine)
-							printIndentation(format.indentation, writer, indentationLevel+1)
-						
-						let elementError = emitJSONElement(currentHead, format, writer, indentationLevel+1)
-						match(elementError) {
-							None => void,
-							Some(e) => {
-								err = elementError
+							printNewLine()
+
+						let elemLevel = indentationLevel+1
+					
+						if (format.arrayFormat == OneArrayEntryPerLine)
+							printIndentation(elemLevel)
+
+						let err = printElement(e, elemLevel)
+
+						if (Option.isNone(err)) {
+							if (format.arrayFormat == OneArrayEntryPerLine) {
+								printNewLine()
+								printIndentation(indentationLevel)
+							}
+
+							//printer.write("]")
+							printer.writeUnicodeCodePoint(0x5D)
+						}
+
+						err
+					},
+					[initialHead, ...initialRest] => {
+						// printer.write("[")
+						printer.writeUnicodeCodePoint(0x5B)
+
+						if (format.arrayFormat == OneArrayEntryPerLine)
+							printNewLine()
+
+						let mut currentHead = initialHead
+						let mut currentRest = initialRest
+
+						let mut err = None
+
+						let elemLevel = indentationLevel+1
+
+						for (let mut index = 0; ; index += 1) {
+							if (index > 0) {
+								// printer.write(",")
+								printer.writeUnicodeCodePoint(0x2C)
+
+								if (format.arrayFormat == OneArrayEntryPerLine)
+									printNewLine()
+							}
+
+							if (format.arrayFormat == OneArrayEntryPerLine)
+								printIndentation(elemLevel)
+
+							err = printElement(currentHead, elemLevel)
+							if (Option.isSome(err))
 								break
+
+							match (currentRest) {
+								[] => break,
+								[newHead, ...newRest] => {
+									currentHead = newHead
+									currentRest = newRest
+								}
 							}
 						}
 
-						match (currentRest) {
-							[] => break,
-							[newHead, ...newRest] => {
-								currentHead = newHead
-								currentRest = newRest
+						if (Option.isNone(err)) {
+							if (format.arrayFormat == OneArrayEntryPerLine) {
+								printNewLine()
+								printIndentation(indentationLevel)
 							}
-						}
-					}
 
-					if (Option.isNone(err)) {
-						if (format.arrayFormat == OneArrayEntryPerLine) {
-							writer.writeNewLine()
-							printIndentation(format.indentation, writer, indentationLevel)
+							// printer.write("]")
+							printer.writeUnicodeCodePoint(0x5D)
 						}
-						writer.write("]")
+
+						err
 					}
 				}
-			}
-		},
+			},
+			JSONObject(entries) => {
+				match (entries) {
+					[] => {
+						// printer.write("{}")
+						printer.writeUnicodeCodePoint(0x7B)
+						printer.writeUnicodeCodePoint(0x7D)
 
-		JSONObject(entries) => {
-			match (entries) {
-				[] => writer.write("{}"),
-				[(key, value)] => {
-					writer.writeChar('{')
-					if (format.objectFormat == OneObjectEntryPerLine) {
-						writer.writeNewLine()
-						printIndentation(format.indentation, writer, indentationLevel+1)
-					}
-					
-					emitEscapedQuotedString(key, format, writer)
-					writer.write(
-						match (format.objectFormat) {
-							CompactObjectEntries => ":",
-							OneObjectEntryPerLine => ": "
-						}
-					)
-					err = emitJSONElement(value, format, writer, indentationLevel+1)
+						None
+					},
+					[(key, value)] => {
+						//printer.writeChar('{')
+						printer.writeUnicodeCodePoint(0x7B)
 
-					if (Option.isNone(err)) {
+						let elemLevel = indentationLevel+1
+
 						if (format.objectFormat == OneObjectEntryPerLine) {
-							writer.writeNewLine()
-							printIndentation(format.indentation, writer, indentationLevel)
+							printNewLine()
+							printIndentation(elemLevel)
 						}
-						writer.writeChar('}')
-					}
-				},
-				[initialHead, ...initialRest] => {
-					writer.writeChar('{')
-					if (format.objectFormat == OneObjectEntryPerLine)
-						writer.writeNewLine()
+						
+						emitEscapedQuotedString(key)
 
-					let mut currentHead = initialHead
-					let mut currentRest = initialRest
-
-					for (let mut index = 0; ; index += 1) {
-						if (index > 0) {
-							writer.write(",")
-							if (format.objectFormat == OneObjectEntryPerLine)
-								writer.writeNewLine()
+						match (format.objectFormat) {
+							CompactObjectEntries => {
+								//printer.writeChar(':')
+								printer.writeUnicodeCodePoint(0x3A)
+							},
+							OneObjectEntryPerLine => {
+								//printer.writeChar(':')
+								printer.writeUnicodeCodePoint(0x3A)
+								printer.writeUnicodeCodePoint(0x20)
+							}
 						}
+
+						let err = printElement(value, elemLevel)
+
+						if (Option.isNone(err)) {
+							if (format.objectFormat == OneObjectEntryPerLine) {
+								printNewLine()
+								printIndentation(indentationLevel)
+							}
+
+							// printer.writeChar('}')
+							printer.writeUnicodeCodePoint(0x7D)
+						}
+						
+						err
+					},
+					[initialHead, ...initialRest] => {
+						// printer.writeChar('{')
+						printer.writeUnicodeCodePoint(0x7B)
 
 						if (format.objectFormat == OneObjectEntryPerLine)
-							printIndentation(format.indentation, writer, indentationLevel+1)
+							printNewLine()
 
-						let (key, value) = currentHead
-						
-						emitEscapedQuotedString(key, format, writer)
-						writer.write(
+						let mut currentHead = initialHead
+						let mut currentRest = initialRest
+
+						let mut err = None
+
+						let elemLevel = indentationLevel+1
+
+						for (let mut index = 0; ; index += 1) {
+							if (index > 0) {
+								// printer.write(",")
+								printer.writeUnicodeCodePoint(0x2C)
+
+								if (format.objectFormat == OneObjectEntryPerLine)
+									printNewLine()
+							}
+
+							if (format.objectFormat == OneObjectEntryPerLine)
+								printIndentation(elemLevel)
+
+							let (key, value) = currentHead
+							
+							emitEscapedQuotedString(key)
+
 							match (format.objectFormat) {
-								CompactObjectEntries => ":",
-								OneObjectEntryPerLine => ": "
+								CompactObjectEntries => {
+									//printer.writeChar(':')
+									printer.writeUnicodeCodePoint(0x3A)
+								},
+								OneObjectEntryPerLine => {
+									//printer.write(": ")
+									printer.writeUnicodeCodePoint(0x3A)
+									printer.writeUnicodeCodePoint(0x20)
+								}
 							}
-						)
-						let elementError = emitJSONElement(value, format, writer, indentationLevel+1)
-						match(elementError) {
-							None => void,
-							Some(e) => {
-								err = elementError
+
+							err = printElement(value, elemLevel)
+
+							if (Option.isSome(err))
 								break
+
+							match (currentRest) {
+								[] => break,
+								[newHead, ...newRest] => {
+									currentHead = newHead
+									currentRest = newRest
+								}
 							}
 						}
 
-						match (currentRest) {
-							[] => break,
-							[newHead, ...newRest] => {
-								currentHead = newHead
-								currentRest = newRest
+						if (Option.isNone(err)) {
+							if (format.objectFormat == OneObjectEntryPerLine) {
+								printNewLine()
+								printIndentation(indentationLevel)
 							}
+							
+							// printer.writeChar('}')
+							printer.writeUnicodeCodePoint(0x7D)
 						}
-					}
 
-					if (Option.isNone(err)) {
-						if (format.objectFormat == OneObjectEntryPerLine) {
-							writer.writeNewLine()
-							printIndentation(format.indentation, writer, indentationLevel)
-						}
-						writer.writeChar('}')
+						err
 					}
 				}
 			}
 		}
 	}
 
-	err
-}
-
-let emitJSON = (json: JSON, format: FormattingSettings, writer: Writer) => {
-	let error = emitJSONElement(json, format, writer, 0)
-
-	if (format.finishWithNewLine && Option.isNone(error))
-		writer.writeNewLine()
-
-	error
-}
-
-let makeWriter = (buf: StringBuilder.StringBuilder, lineEnding: LineEnding) => {
 	{
-		write: s => StringBuilder.append(s, buf),
-		writeChar: c => StringBuilder.appendChar(c, buf),
-		writeUnicodeCodePoint: c => StringBuilder.appendUnicodeCodePoint(c, buf),
-		writeNewLine: match (lineEnding) {
-			NoLineEnding => () => void,
-			LineFeed => () => StringBuilder.appendChar('\n', buf),
-			CarriageReturnLineFeed => () => StringBuilder.append("\r\n", buf),
-			CarriageReturn => () => StringBuilder.appendChar('\r', buf),
-		},
-	} : Writer
-}
+		emit: (json) => {
+			let error = printElement(json, 0)
 
-let makeDummyWriter = () => {
-	{
-		write: s => void,
-		writeChar: c => void,
-		writeUnicodeCodePoint: c => void,
-		writeNewLine: () => void,
-	} : Writer
+			if (format.finishWithNewLine && Option.isNone(error))
+				printNewLine()
+
+			error
+		}
+	} : JSONWriter
 }
 
 export let toString = (json: JSON, format: FormattingSettings) => {
 	// If we want to be smart about limiting allocations it may make sense to
-	// guesstimate the capacity by traversing the json .
+	// // guesstimate the capacity by traversing the json .
 	let buf = StringBuilder.make(16)
 
-	let writer = makeWriter(buf, format.lineEnding)
-	// let writer = makeDummyWriter()
+	let printer = makeStringBuilderPrinter(buf)
+	// //let printer = makeDummyPrinter()
 
-	let error = emitJSON(json, format, writer)
+	let writer = makePrettyPrintJSONWriter(format, printer)
+
+	let error = writer.emit(json)
 
 	match (error) {
 		None => Ok(StringBuilder.toString(buf)),
-		// None => Ok(""),
 		Some(e) => Err(e)
 	}
 }
 
-export let toStringCompact = (json: JSON) => toString(json, defaultCompactFormat())
+export let toStringCompact = (json: JSON) => {
+	// If we want to be smart about limiting allocations it may make sense to
+	// // guesstimate the capacity by traversing the json .
+	let buf = StringBuilder.make(16)
+
+	let printer = makeStringBuilderPrinter(buf)
+	// //let printer = makeDummyPrinter()
+
+	let writer = makeCompactJSONWriter(printer)
+
+	let error = writer.emit(json)
+
+	match (error) {
+		None => Ok(StringBuilder.toString(buf)),
+		Some(e) => Err(e)
+	}
+}
+
 
 export let toStringPretty = (json: JSON) => toString(json, defaultPrettyFormat())

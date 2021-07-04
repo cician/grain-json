@@ -22,6 +22,7 @@ let printSomething = () => {
 		Json.JSONNumber(-0),
 		Json.JSONNumber(1E200),
 		Json.JSONNumber(1E-200),
+		Json.JSONNumber(1/2),
 		Json.JSONString("🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿 Hello\n\"wo</ \u007F \u0080 rld\"! 🤘🏻"),
 		Json.JSONArray([]),
 		Json.JSONArray([Json.JSONNull]),

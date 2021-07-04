@@ -157,5 +157,17 @@ export let appendUnicodeCodePoint = (code: Number, builder: StringBuilder) => {
 }
 
 export let toString = (builder: StringBuilder) => {
+	// FIXME String.decodeRange hangs for small buffer size
+	// append("rgergrge43n2tssrs", builder)
 	String.decodeRange(builder.buffer, String.UTF8, 0, builder.size)
+}
+
+export let clear = (builder: StringBuilder) => {
+	builder.size = 0
+}
+
+export let reset = (newCapacity: Number, builder: StringBuilder) => {
+	builder.size = 0
+	builder.capacity = newCapacity
+	builder.buffer = Bytes.make(newCapacity)
 }
