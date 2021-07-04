@@ -1,1 +1,3 @@
 *.wasm
+*.gr.mashtree
+*.gr.modsig
