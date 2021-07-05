@@ -86,13 +86,8 @@ export let append = (s: String, builder: StringBuilder) => {
 	// resize if necessary
 	ensureFreeCapacity(bytesToWrite, builder)
 
-	// Copy the string's content in the buffer offset by current size.
-	let bytesWritten = Stubs.writeStringToBytesAsUTF8(currentSize, s, builder.buffer)
-	// assert(bytesWritten == bytesToWrite)
-
-	// Could replace the stub above with this function recently added to stdlib, but
-	// it's slightly slower because it works bytes by byte even for UTF8.
-	//String.encodeAt(s, String.UTF8, builder.buffer, currentSize)
+	// Copy the string's content into the buffer, offset by current size.
+	String.encodeAt(s, String.UTF8, builder.buffer, currentSize)
 
 	builder.size = newSize
 }

@@ -18,7 +18,7 @@ let _BYTES_VALUE_OFFSET = 8n
 let _CHAR_VALUE_OFFSET = 4n
 
 @disableGC
-export let copyFromLinearMemoryToBytes = (srcPtr: WasmI32, srcPos: Number, dstPos: Number, len: Number, dst: Bytes) => {
+let copyFromLinearMemoryToBytes = (srcPtr: WasmI32, srcPos: Number, dstPos: Number, len: Number, dst: Bytes) => {
 	// based on Bytes.move
 
 	let (+) = WasmI32.add
@@ -36,22 +36,6 @@ export let copyFromLinearMemoryToBytes = (srcPtr: WasmI32, srcPos: Number, dstPo
 	}
 
 	Memory.copy(dstPtr + _BYTES_VALUE_OFFSET + dstPosW, srcPtr + srcPosW, lenW)
-}
-
-@disableGC
-export let writeStringToBytesAsUTF8 = (dstPos: Number, str: String, dst: Bytes) => {
-	// This function could be replaced in the future if this gets adjusted with my suggestion and merged:
-	// https://github.com/grain-lang/grain/pull/683
-
-	let srcPtr = WasmI32.add(WasmI32.fromGrain(str), _STRING_VALUE_OFFSET)
-
-	// like String.byteLength, but without wrapping to Number
-	let size = String.byteLength(str)
-
-	copyFromLinearMemoryToBytes(srcPtr, 0, dstPos, size, dst)
-
-	// return the number of bytes written
-	size
 }
 
 @disableGC
