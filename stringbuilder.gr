@@ -1,6 +1,5 @@
 import Exception from "runtime/exception"
 import Bytes from "bytes"
-import WasmI32 from "runtime/unsafe/wasmi32"
 import String from "string"
 import Stubs from "stubs"
 
@@ -76,7 +75,6 @@ let ensureFreeCapacity = (size: Number, builder: StringBuilder) => {
 }
 
 export let append = (s: String, builder: StringBuilder) => {
-	let srcStrPtr = WasmI32.fromGrain(s)
 	let bytesToWrite = String.byteLength(s)
 
 	let currentSize = builder.size
