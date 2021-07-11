@@ -62,9 +62,6 @@ let printSomething = () => {
 	} : Json.FormattingSettings))
 
 	print("")
-	print("toString:")
-	testPrint(Json.toStringPretty(test))
-	testPrint(Json.toStringPretty(Json.JSONObject([("simple", Json.JSONString("as that!"))])))
 
 	// There's currently a github issue for these https://github.com/grain-lang/grain/issues/693
 	let infinity = 1.0 / 0.0
