@@ -330,6 +330,12 @@ let isNaN = (value: WasmF64) => {
 	WasmF64.ne(value, value)
 }
 
+let makeNaNException = () => Some(InvalidJSON("NaN is not allowed in JSONNumber"))
+
+let makeInfException = () => Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
+
+let makeNegInfException = () => Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
+
 @disableGC
 let printNumberWasmF64 = (value: WasmF64, printer: Printer) => {
 	if (isFinite(value)) {
@@ -349,11 +355,13 @@ let printNumberWasmF64 = (value: WasmF64, printer: Printer) => {
 		// coninue formatting without representing these values correctly
 		// (like JavaScript's JSON.stringify).
 		if (isNaN(value)) {
-			Some(InvalidJSON("NaN is not allowed in JSONNumber"))
+			// Allocating the exception in a function without @disableGC makes
+			// it easier to avoid problems with reference counting.
+			makeNaNException()
 		} else if (WasmF64.lt(value, 0.0W)) {
-			Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
+			makeNegInfException()
 		} else {
-			Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
+			makeInfException()
 		}
 	}
 }
