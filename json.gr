@@ -4,7 +4,6 @@ import Array from "array"
 import StringBuilder from "stringbuilder"
 import Option from "option"
 import Number from "number"
-import Stubs from "stubs"
 
 export enum JSON {
 	JSONNull,
@@ -500,8 +499,7 @@ let makeCompactJSONWriter = (printer: Printer) => {
 		//printer.write("\"")
 		printer.writeUnicodeCodePoint(0x22)
 
-		// If/when my PR gets merget hopefully this will be String.forEachCodePoint without need for intermediate allocations.
-		Stubs.forEachCodePoint(emitCodePoint, s)
+		String.forEachCodePoint(emitCodePoint, s)
 
 		//printer.write("\"")
 		printer.writeUnicodeCodePoint(0x22)
@@ -873,8 +871,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 				// Note that it's important for performance that the closure passed to forEachCodePoint
 				// is not allocated inline here, but just once when creating the writer.
 				
-				// If/when my PR gets merget hopefully this will be String.forEachCodePoint without need for intermediate allocations.
-				Stubs.forEachCodePoint(emitCodePoint, s)
+				String.forEachCodePoint(emitCodePoint, s)
 
 				//printer.write("\"")
 				printer.writeUnicodeCodePoint(0x22)
@@ -892,7 +889,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 
 				let mut prevCodePoint = 0
 
-				Stubs.forEachCodePoint((codePoint) => {
+				String.forEachCodePoint((codePoint) => {
 					if (codePoint == 47) {
 						if (format.escapeHTMLUnsafeSequences && prevCodePoint == 60) {
 							//printer.write("\\/")
