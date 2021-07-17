@@ -69,7 +69,9 @@ let printSomething = () => {
 	let negativeinfinity = -1.0 / 0.0
 
 	print("not allowed:")
-	testPrint(Json.toStringCompact(Json.JSONArray([Json.JSONNumber(infinity), Json.JSONNumber(negativeinfinity), Json.JSONNumber(nan)])))
+	testPrint(Json.toStringCompact(Json.JSONNumber(infinity)))
+	testPrint(Json.toStringCompact(Json.JSONNumber(negativeinfinity)))
+	testPrint(Json.toStringCompact(Json.JSONNumber(nan)))
 
 	// print("")
 	// print("parsing:")

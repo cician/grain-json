@@ -4,6 +4,15 @@ import Array from "array"
 import StringBuilder from "stringbuilder"
 import Option from "option"
 import Number from "number"
+import Exception from "runtime/exception"
+import WasmI32 from "runtime/unsafe/wasmi32"
+import WasmI64 from "runtime/unsafe/wasmi64"
+import WasmF32 from "runtime/unsafe/wasmf32"
+import WasmF64 from "runtime/unsafe/wasmf64"
+import NumberUtils from "runtime/numberUtils"
+import Tags from "runtime/unsafe/tags"
+import Numbers from "runtime/numbers"
+import Memory from "runtime/unsafe/memory"
 
 export enum JSON {
 	JSONNull,
@@ -289,20 +298,48 @@ let printBool = (b: Bool, printer: Printer) => {
 	}
 }
 
-let printNumber = (n: Number, printer: Printer) => {
-	if (Number.isFinite(n)) {
-		// In order to not duplicate code here I simply use Grain's
-		// toString of Number. This is a bit risky because as far as I
-		// can tell what it outputs is not formally documented. So
-		// any changes to that could result in invalid JSON here. For
-		// now at least it was considered the way to go. If one day a
-		// decision is made to fork that function. The starting point
-		// would be NumberUtils.dtoa and some optimizations could
-		// probably be done like avoiding memory allocations or
-		// checking for NaNs/Infs two times.
-		// FIXME normalize rational numbers
-		printer.write(toString(n))
-		None
+exception UnknownNumberTag
+
+@disableGC
+let printNumberWasmI32 = (value: WasmI32, printer: Printer) => {
+	let s = NumberUtils.itoa32(value, 10n)
+	printer.write(s)
+	Memory.decRef(WasmI32.fromGrain(s))
+
+	let none = None
+	Memory.incRef(WasmI32.fromGrain(none))
+	none
+}
+
+@disableGC
+let printNumberWasmI64 = (value: WasmI64, printer: Printer) => {
+	let s = NumberUtils.itoa64(value, 10n)
+	printer.write(s)
+	Memory.decRef(WasmI32.fromGrain(s))
+
+	let none = None
+	Memory.incRef(WasmI32.fromGrain(none))
+	none
+}
+
+let isFinite = (value: WasmF64) => {
+	WasmF64.eq(WasmF64.sub(value, value), 0.W)
+}
+
+let isNaN = (value: WasmF64) => {
+	WasmF64.ne(value, value)
+}
+
+@disableGC
+let printNumberWasmF64 = (value: WasmF64, printer: Printer) => {
+	if (isFinite(value)) {
+		let s = NumberUtils.dtoa(value)
+		printer.write(s)
+		Memory.decRef(WasmI32.fromGrain(s))
+
+		let none = None
+		Memory.incRef(WasmI32.fromGrain(none))
+		none
 	} else {
 		// JSON standard doesn't allow NaN or infinite values in numbers,
 		// but WASM f64 (IEEE 754-2008), as well as Grain's number types do
@@ -311,13 +348,81 @@ let printNumber = (n: Number, printer: Printer) => {
 		// directly. Other possible choices were to throw exceptions or to
 		// coninue formatting without representing these values correctly
 		// (like JavaScript's JSON.stringify).
-		if (Number.isNaN(n)) {
+		if (isNaN(value)) {
 			Some(InvalidJSON("NaN is not allowed in JSONNumber"))
-		} else if (n < 0) {
+		} else if (WasmF64.lt(value, 0.0W)) {
 			Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
 		} else {
 			Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
 		}
+	}
+}
+
+@disableGC
+let printNumber = (value: Number, printer: Printer) => {
+	let (&) = WasmI32.and
+	let (==) = WasmI32.eq
+	let (!=) = WasmI32.ne
+	let (<<) = WasmI32.shl
+	let (>>) = WasmI32.shrS
+
+	let ptr = WasmI32.fromGrain(value)
+	if ((ptr & 1n) != 0n) {
+		// FIXME expose runtime/numbers.untagSimple?
+		let asWasmI32 = ptr >> 1n
+		printNumberWasmI32(asWasmI32, printer)
+	} else if ((ptr & 7n) == Tags._GRAIN_GENERIC_HEAP_TAG_TYPE) {
+		let tag = WasmI32.load(ptr, 0n)
+		match (tag) {
+			t when t == Tags._GRAIN_BOXED_NUM_HEAP_TAG => {
+				let numberTag = WasmI32.load(ptr, 4n)
+				match (numberTag) {
+					t when t == Tags._GRAIN_INT32_BOXED_NUM_TAG => {
+						let asWasmI32 = WasmI32.load(ptr, 8n) // FIXME magic numbers
+						printNumberWasmI32(asWasmI32, printer)
+					},
+					t when t == Tags._GRAIN_INT64_BOXED_NUM_TAG => {
+						let asWasmI64 = WasmI64.load(ptr, 8n) // FIXME magic numbers
+						printNumberWasmI64(asWasmI64, printer)
+					},
+					t when t == Tags._GRAIN_RATIONAL_BOXED_NUM_TAG => {
+						// As a compromnise, convert the rational into a float
+						// and then print that. This means there can be
+						// precision loss even for values that could be printed
+						// exactly in decimal notation, but doing otherwise
+						// could both compromise perfomance and confuse
+						// developers as most JSON libraries in other languages
+						// likely only deal with integers and floats.
+						// Note that the ECMA-404 standard only specifies how
+						// numbers should be formatted as text (in decimal
+						// notation), so we could go the extra mile and at
+						// least for some numbers try printing the exact
+						// number. For example those that have a power of 10
+						// in the denominator.
+						let asWasmF64 = WasmF64.div(WasmF64.convertI32S(Numbers.boxedRationalNumerator(ptr)), WasmF64.convertI32S(Numbers.boxedRationalDenominator(ptr)))
+
+						printNumberWasmF64(asWasmF64, printer)
+					},
+					t when t == Tags._GRAIN_FLOAT32_BOXED_NUM_TAG => {
+						let asWasmF32 = WasmF32.load(ptr, 8n) // FIXME magic numbers
+						let asWasmF64 = WasmF64.promoteF32(asWasmF32)
+						printNumberWasmF64(asWasmF64, printer)
+					},
+					t when t == Tags._GRAIN_FLOAT64_BOXED_NUM_TAG => {
+						let asWasmF64 = WasmF64.load(ptr, 8n) // FIXME magic numbers
+						printNumberWasmF64(asWasmF64, printer)
+					},
+					_ => {
+						throw UnknownNumberTag
+					}
+				}
+			},
+			_ => {
+				throw UnknownNumberTag
+			}
+		}
+	} else {
+		throw UnknownNumberTag
 	}
 }
 
