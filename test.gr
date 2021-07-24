@@ -80,15 +80,53 @@ let printSomething = () => {
 	print(Json.parse("true"))
 	print(Json.parse("false"))
 	print(Json.parse("\"Hello world!\""))
+	print(Json.parse("\"A \"quoted\" string\""))
 	print(Json.parse("{}"))
 	print(Json.parse("{ \"Hello\" : \"World!\" }"))
 	print(Json.parse("{\"a\":\"A\",\"b\":\"B\"}"))
 	print(Json.parse("{ \"a\" : \"A\", \"b\" : \"B\" }"))
+	print(Json.parse("{ \"a\" : { \"0\": false, \"1\":true }, \"b\" : [\"A\",\"B\",\"C\"] }"))
 	print(Json.parse("{\"n\": [1,2,\"3\",false,null]}"))
 	print(Json.parse("[]"))
 	print(Json.parse("[true,false,null]"))
 	print(Json.parse("{}error"))
 	print(Json.parse("[true,false,null,\"hello\",[true]]"))
+
+	// print(Json.parse("\"怀\""))
+	// print(Json.parse("\"\u005Cu6000\""))
+	// testPrint(Json.toStringPretty(Json.JSONString("\u1770")))
+
+	// print("\u6000")
+	
+
+	print(Json.parse("\"\u005Cu6000 \u005Cud800\u005Cudc82 \u005Cud83e\u005Cudd18\u005Cud83c\u005Cudffb \u005Cud83c\u005Cudff4\u005Cudb40\u005Cudc67\u005Cudb40\u005Cudc62\u005Cudb40\u005Cudc77\u005Cudb40\u005Cudc6c\u005Cudb40\u005Cudc73\u005Cudb40\u005Cudc7f\"")) // 怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿
+
+	
+	
+
+	match (Json.parse("\"怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿\"")) {
+	// match (Json.parse("\"\u005Cud800\"")) {
+		Ok(json) => {
+			print(json)
+			testPrint(Json.toString(
+				json,
+				{
+					indentation: Json.IndentWithTab,
+					arrayFormat: Json.OneArrayEntryPerLine,
+					objectFormat: Json.OneObjectEntryPerLine,
+					lineEnding: Json.LineFeed,
+					finishWithNewLine: true,
+					escapeAllControlPoints: true,
+					escapeHTMLUnsafeSequences: true,
+					escapeNonASCII: true
+				} : Json.FormattingSettings)
+			)
+		},
+		Err(e) => Exception.printException(e)
+	}
+	void
+
+	// TODO round trip
 }
 
 printSomething();

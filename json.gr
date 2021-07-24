@@ -869,6 +869,17 @@ let rec printElementPretty = (json: JSON, implHelper: JSONWriterPrettyImplHelper
 	}
 }
 
+let isHighSurrogate = (code: Number) => code >= 0xD800 && code <= 0xDBFF
+
+let isLowSurrogate = (code: Number) => code >= 0xDC00 && code <= 0xDFFF
+
+let combineSurrogatePairToCodePoint = (highSurrogate: Number, lowSurrogate: Number) => {
+	// If this was a method exposed by itself in a library then it should check the
+	// ranges of the input surrogates, but here it's necessary because checks are made
+	// as part of the parsing logic.
+	((highSurrogate - 0xD800) << 10) + (lowSurrogate - 0xDC00) + 0x10000
+}
+
 let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) => {
 	let printNewLine = match (format.lineEnding) {
 		NoLineEnding => () => void,
@@ -1233,106 +1244,6 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 		}
 	}
 }
-, parseStringEscapeSequence = (parserImplHelper: JSONParserImplHelper, builder: StringBuilder.StringBuilder) => {
-	match (expectCodePointAndAdvance(0x5C, parserImplHelper)) { // '\'
-		None => {
-			let c = parserImplHelper.currentCodePoint
-			match (c) {
-				0x22 => { // '"'
-					StringBuilder.appendUnicodeCodePoint(0x22, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x5C => { // '\'
-					StringBuilder.appendUnicodeCodePoint(0x5C, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x08 => { // '\b' (backspace)
-					StringBuilder.appendUnicodeCodePoint(0x08, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x0C => { // '\f' (form feed)
-					StringBuilder.appendUnicodeCodePoint(0x0C, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x0A => { // '\n' (line feed)
-					StringBuilder.appendUnicodeCodePoint(0x0A, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x0D => { // '\r' (carriage return)
-					StringBuilder.appendUnicodeCodePoint(0x0D, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x09 => { // '\t' (tab)
-					StringBuilder.appendUnicodeCodePoint(0x09, builder)
-					next(parserImplHelper)
-					None
-				},
-				0x75 => { // 'u' (start of hexadecimal UTF-16 escape sequence)
-					// TODO
-					// - function to parse a 4 digit escape sequence
-					// - check if it's a start of a surrogate pair and enforce
-					//   reading the second pair
-
-					next(parserImplHelper)
-
-					let mut err = None
-
-					let mut codePoint = 0
-					for (let mut digitIndex=3; digitIndex>=0; digitIndex -= 1) {
-						let hexDigitCodePoint = parserImplHelper.currentCodePoint
-						
-						let mut digit = hexDigitCodePoint
-
-						if (hexDigitCodePoint >= 48 && hexDigitCodePoint <= 57) { // 0..9
-							digit -= 48
-						} else if (hexDigitCodePoint >= 65 && hexDigitCodePoint <= 70) { // A..F
-							digit -= 65
-						} else if (hexDigitCodePoint >= 97 && hexDigitCodePoint <= 102) { // a..f
-							digit -= 97
-						} else if (hexDigitCodePoint == -1) {
-							err = Some(UnexpectedEndOfInput)
-							break
-						} else {
-							err = Some(buildUnexpectedTokenError(parserImplHelper))
-							break
-						}
-						
-						let shift = digitIndex * 4
-						codePoint = codePoint | (digit << shift)
-
-						next(parserImplHelper)
-					}
-
-					match (err) {
-						None => {
-							StringBuilder.appendUnicodeCodePoint(codePoint, builder)
-						},
-						_ => {
-							void
-						}
-					}
-
-					err
-				},
-				-1 => {
-					Some(UnexpectedEndOfInput)
-				},
-				_ => {
-					// JSON doesn't allow arbitrary characters to be preceded by backslash escape.
-					// Only the ones above.
-					Some(buildUnexpectedTokenError(parserImplHelper))
-				}
-			}
-		},
-		e => e
-	}
-}
 , parseString = (parserImplHelper: JSONParserImplHelper) => {
 	// TODO Reuse the buffer for each string.
 	// This is first implementation to just keep going with overall
@@ -1345,11 +1256,16 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 			let mut done = false
 			let builder = StringBuilder.make(16)
 
+			let mut prevHighSurrogate = -1 // not using Option here to avoid heap allocations.
+
 			while (!done) {
-				let c = parserImplHelper.currentCodePoint
-				match (c) {
+				match (parserImplHelper.currentCodePoint) {
 					0x22 => { // '"'
 						next(parserImplHelper)
+						if (prevHighSurrogate != -1) {
+							StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+							prevHighSurrogate = -1
+						}
 						done = true
 						break
 					},
@@ -1358,18 +1274,153 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 						break
 					},
 					0x5C => { // '\'
-						match (parseStringEscapeSequence(parserImplHelper, builder)) {
-							None => void,
-							e => {
-								err = e
+						next(parserImplHelper)
+
+						match (parserImplHelper.currentCodePoint) {
+							0x22 => { // '"'
+								StringBuilder.appendUnicodeCodePoint(0x22, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x5C => { // '\'
+								StringBuilder.appendUnicodeCodePoint(0x5C, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x08 => { // '\b' (backspace)
+								StringBuilder.appendUnicodeCodePoint(0x08, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x0C => { // '\f' (form feed)
+								StringBuilder.appendUnicodeCodePoint(0x0C, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x0A => { // '\n' (line feed)
+								StringBuilder.appendUnicodeCodePoint(0x0A, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x0D => { // '\r' (carriage return)
+								StringBuilder.appendUnicodeCodePoint(0x0D, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x09 => { // '\t' (tab)
+								StringBuilder.appendUnicodeCodePoint(0x09, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x75 => { // 'u' (start of hexadecimal UTF-16 escape sequence)
+								next(parserImplHelper)
+
+								let mut codePoint = 0
+								for (let mut digitIndex=3; digitIndex>=0; digitIndex -= 1) {
+									let hexDigitCodePoint = parserImplHelper.currentCodePoint
+									
+									let mut digit = hexDigitCodePoint
+
+									if (hexDigitCodePoint >= 48 && hexDigitCodePoint <= 57) { // 0..9
+										digit -= 48
+									} else if (hexDigitCodePoint >= 65 && hexDigitCodePoint <= 70) { // A..F
+										digit -= 55 // (65 - 10)
+									} else if (hexDigitCodePoint >= 97 && hexDigitCodePoint <= 102) { // a..f
+										digit -= 87 // (97 - 10)
+									} else if (hexDigitCodePoint == -1) {
+										err = Some(UnexpectedEndOfInput)
+										break
+									} else {
+										err = Some(buildUnexpectedTokenError(parserImplHelper))
+										break
+									}
+									
+									let shift = digitIndex * 4
+									codePoint = codePoint | (digit << shift)
+
+									next(parserImplHelper)
+								}
+
+								match (err) {
+									None => {
+										if (isHighSurrogate(codePoint)) {
+											// Don't emit the codepoint yet.
+											// It's part of a UTF-16 surrogate pair and needs to be combined
+											// with whatever escaped codepoint comes next.
+											// Which is easier said than done becase the JSON may not be well
+											// formatted and not have one. In which case we want to mimick
+											// the behaviour of node.js and browsers, that continue to parse
+											// and just keep the single surrogate. Which is kinda wrong, if you ask me, but doing otherwise may be unwise.
+											// The ECMA-404 spec is very loose about these things.
+											prevHighSurrogate = codePoint
+										} else {
+											if (prevHighSurrogate != -1) {
+												if (isLowSurrogate(codePoint)) {
+													let lowSurrogate = codePoint
+													let combinedCodePoint = combineSurrogatePairToCodePoint(prevHighSurrogate, lowSurrogate)
+													
+													StringBuilder.appendUnicodeCodePoint(combinedCodePoint, builder)
+												} else {
+													// There's a previous high surrogate not yet written to the buffer,
+													// but the following escaped codepoint is not a low surrogate.
+													// This is invalid pairing, but we want to just take both as-is.
+													StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+													StringBuilder.appendUnicodeCodePoint(codePoint, builder)
+												}
+
+												prevHighSurrogate = -1
+											} else {
+												// No previous surrogate to combine. Just take the code point as-is, whether a proper codepoint or an invalid surrogate.
+												StringBuilder.appendUnicodeCodePoint(codePoint, builder)
+											}
+										}
+									},
+									_ => {
+										break
+									}
+								}
+							},
+							-1 => {
+								err = Some(UnexpectedEndOfInput)
+								break
+							},
+							_ => {
+								// JSON doesn't allow arbitrary characters to be preceded by backslash escape.
+								// Only the ones above.
+								err = Some(buildUnexpectedTokenError(parserImplHelper))
 								break
 							}
 						}
 					},
 					c => {
+						// Finally the happy case of a simple unescaped code point.
 						next(parserImplHelper)
 						StringBuilder.appendUnicodeCodePoint(c, builder)
-						void
+						if (prevHighSurrogate != -1) {
+							StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+							prevHighSurrogate = -1
+						}
 					}
 				}
 			}
