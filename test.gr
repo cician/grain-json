@@ -73,11 +73,22 @@ let printSomething = () => {
 	testPrint(Json.toStringCompact(Json.JSONNumber(negativeinfinity)))
 	testPrint(Json.toStringCompact(Json.JSONNumber(nan)))
 
-	// print("")
-	// print("parsing:")
-	// print(Json.parse("{\"n\": [1,2,\"3\",false,null]}{}"))
-	// print(Json.parse("{}ignored"))
-	// print(Json.parse("[true,false,null,\"hello\",[true]]"))
+	print("")
+	print("parsing:")
+	print(Json.parse("null"))
+	print(Json.parse("\tnull \r\n"))
+	print(Json.parse("true"))
+	print(Json.parse("false"))
+	print(Json.parse("\"Hello world!\""))
+	print(Json.parse("{}"))
+	print(Json.parse("{ \"Hello\" : \"World!\" }"))
+	print(Json.parse("{\"a\":\"A\",\"b\":\"B\"}"))
+	print(Json.parse("{ \"a\" : \"A\", \"b\" : \"B\" }"))
+	print(Json.parse("{\"n\": [1,2,\"3\",false,null]}"))
+	print(Json.parse("[]"))
+	print(Json.parse("[true,false,null]"))
+	print(Json.parse("{}error"))
+	print(Json.parse("[true,false,null,\"hello\",[true]]"))
 }
 
 printSomething();

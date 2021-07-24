@@ -39,8 +39,15 @@ For now you need to have Grain already installed and on the path. Then just laun
 			or is Option packed into the pointer like simple numbers?
 			Not an issue since variants without data get reused.
 - [ ] Parsing
-
-	TBD
+	- [x] Nulls
+	- [x] Booleans
+	- [x] Arrays
+	- [x] Objects
+	- [ ] String escape sequence parsing
+	- [ ] Numbers
 - [x] License
 - [ ] Tests
 - [ ] Docs
+
+# Credits
+Parsing code loosely based on one written by [jozanza](https://github.com/jozanza) and provided on grain's Discord.

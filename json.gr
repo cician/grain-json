@@ -1,6 +1,6 @@
 import String from "string"
 import Char from "char"
-import Array from "array"
+import List from "list"
 import StringBuilder from "stringbuilder"
 import Option from "option"
 import Number from "number"
@@ -13,6 +13,7 @@ import NumberUtils from "runtime/numberUtils"
 import Tags from "runtime/unsafe/tags"
 import Numbers from "runtime/numbers"
 import Memory from "runtime/unsafe/memory"
+import StringReader from "stringreader"
 
 export enum JSON {
 	JSONNull,
@@ -188,7 +189,7 @@ let emitUTF16EscapeSequence = (codePoint: Number, printer: Printer) => {
 	// this codepath is only for escape sequences, which probably aren't all
 	// that common occurence.
 
-	//printer.write("\\u");
+	//printer.write("\\u")
 	printer.writeUnicodeCodePoint(92)
 	printer.writeUnicodeCodePoint(117)
 	// Loop over the four digit from most to least significant.
@@ -229,7 +230,7 @@ let emitEscapedUnicodeSequence = (codePoint: Number, printer: Printer) => {
 	} else {
 		// The following three lines are copied from String module of Grain's
 		// stdlib. It would be nice to share more code. On the other hand it
-		// may make sense to juste have these few instructions directly here
+		// may make sense to just have these few instructions directly here
 		// from the performance standpoint so we can print millions of emojis
 		// per second 😄.
 
@@ -892,7 +893,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 			while (count < indentationLevel) {
 				//printer.writeChar('\t')
 				printer.writeUnicodeCodePoint(0x09)
-				count += 1;
+				count += 1
 			}
 		},
 		IndentWithSpaces(spacesPerIndentation) => (indentationLevel) => {
@@ -901,7 +902,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 			while (count < spaceCount) {
 				//printer.writeChar(' ')
 				printer.writeUnicodeCodePoint(0x20)
-				count += 1;
+				count += 1
 			}
 		},
 		NoIndentation => (indentationLevel) => void
@@ -1017,7 +1018,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 						emitCodePoint(codePoint)
 					}
 
-					prevCodePoint = codePoint;
+					prevCodePoint = codePoint
 				}, s)
 
 				printer.writeUnicodeCodePoint(0x22)
@@ -1078,5 +1079,385 @@ export let toStringCompact = (json: JSON) => {
 	}
 }
 
+record JSONParserImplHelper {
+	reader: StringReader.StringReader,
+	mut currentCodePoint: Number,
+	mut pos: Number
+}
+
+export exception UnexpectedEndOfInput
+
+export exception UnexpectedToken(Char, Number)
 
 export let toStringPretty = (json: JSON) => toString(json, defaultPrettyFormat())
+
+let isInterTokenWhiteSpace = (codePoint: Number) => {
+	match (codePoint) {
+		0x0009 => true, // tab
+		0x000A => true, // line feed
+		0x000D => true, // carriage return
+		0x0020 => true, // space
+		_ => false
+	}
+}
+
+let isAtEndOfInput = (parserImplHelper: JSONParserImplHelper) => {
+	parserImplHelper.currentCodePoint == -1
+}
+
+let next = (parserImplHelper: JSONParserImplHelper) => {
+	parserImplHelper.currentCodePoint = StringReader.readCodePointFast(parserImplHelper.reader)
+	parserImplHelper.pos = parserImplHelper.pos + 1
+}
+
+// let pollCodePoint = (parserImplHelper: JSONParserImplHelper) => {
+// 	if (parserImplHelper.currentCodePoint ==)
+// }
+
+let skipWhiteSpace = (parserImplHelper: JSONParserImplHelper) => {
+	// isAtEndOfInput is not strictly necessary here
+	// could remove as an optimization
+	while (isInterTokenWhiteSpace(parserImplHelper.currentCodePoint) && !isAtEndOfInput(parserImplHelper)) {
+		next(parserImplHelper)
+	}
+}
+
+let buildUnexpectedTokenError = (parserImplHelper: JSONParserImplHelper) => {
+	let char = Char.fromCode(parserImplHelper.currentCodePoint)
+	let pos = parserImplHelper.pos
+	UnexpectedToken(char, pos)
+}
+
+let expectCodePointAndAdvance = (expectedCodePoint: Number, parserImplHelper: JSONParserImplHelper) => {
+	let c = parserImplHelper.currentCodePoint
+	// print(expectedCodePoint)
+	// print(c)
+	if (c == expectedCodePoint) {
+		next(parserImplHelper)
+		None
+	} else if (c == -1) {
+		Some(UnexpectedEndOfInput)
+	} else {
+		Some(buildUnexpectedTokenError(parserImplHelper))
+	}
+}
+
+let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
+	skipWhiteSpace(parserImplHelper)
+
+  	let result = match (parserImplHelper.currentCodePoint) {
+		0x7B => parseObject(parserImplHelper), // '{'
+		0x5B => parseArray(parserImplHelper), // '['
+		0x22 => parseStringValue(parserImplHelper), // '"'
+		0x74 => parseTrueValue(parserImplHelper), // 't'
+		0x66 => parseFalseValue(parserImplHelper), // 'f'
+		0x6E => parseNullValue(parserImplHelper), // 'n'
+		// c => parseNumber(tkn),
+		c => {
+			Err(buildUnexpectedTokenError(parserImplHelper))
+		},
+		-1 => {
+			Err(UnexpectedEndOfInput)
+		}
+	}
+
+	skipWhiteSpace(parserImplHelper)
+
+	result
+}
+, parseNullValue = (parserImplHelper: JSONParserImplHelper) => {
+	match (expectCodePointAndAdvance(0x6E, parserImplHelper)) { // 'n'
+		Some(e) => Err(e),
+		None => {
+			match (expectCodePointAndAdvance(0x75, parserImplHelper)) { // 'u'
+				Some(e) => Err(e),
+				None => {
+					match (expectCodePointAndAdvance(0x6C, parserImplHelper)) { // 'l'
+						Some(e) => Err(e),
+						None => {
+							match (expectCodePointAndAdvance(0x6C, parserImplHelper)) { // 'l'
+								Some(e) => Err(e),
+								None => Ok(JSONNull)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+, parseTrueValue = (parserImplHelper: JSONParserImplHelper) => {
+	match (expectCodePointAndAdvance(0x74, parserImplHelper)) { // 't'
+		Some(e) => Err(e),
+		None => {
+			match (expectCodePointAndAdvance(0x72, parserImplHelper)) { // 'r'
+				Some(e) => Err(e),
+				None => {
+					match (expectCodePointAndAdvance(0x75, parserImplHelper)) { // 'u'
+						Some(e) => Err(e),
+						None => {
+							match (expectCodePointAndAdvance(0x65, parserImplHelper)) { // 'e'
+								Some(e) => Err(e),
+								None => Ok(JSONBoolean(true))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+, parseFalseValue = (parserImplHelper: JSONParserImplHelper) => {
+	match (expectCodePointAndAdvance(0x66, parserImplHelper)) { // 'f'
+		Some(e) => Err(e),
+		None => {
+			match (expectCodePointAndAdvance(0x61, parserImplHelper)) { // 'a'
+				Some(e) => Err(e),
+				None => {
+					match (expectCodePointAndAdvance(0x6C, parserImplHelper)) { // 'l'
+						Some(e) => Err(e),
+						None => {
+							match (expectCodePointAndAdvance(0x73, parserImplHelper)) { // 's'
+								Some(e) => Err(e),
+								None => {
+									match (expectCodePointAndAdvance(0x65, parserImplHelper)) { // 'e'
+										Some(e) => Err(e),
+										None => Ok(JSONBoolean(false))
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+, parseString = (parserImplHelper: JSONParserImplHelper) => {
+	// TODO Evaluate string copying instead for performance reasons.
+	// Though this would eliminate the possibility of parsing JSON
+	// from a streaming source.
+	// Otherwise at least reuse the buffer for each string.
+	// This is first implementation to just keep going with overall
+	// parsing code and will need to be revised... For now no escape
+	// handling at all!
+	match (expectCodePointAndAdvance(0x22, parserImplHelper)) { // '"'
+		Some(e) => Err(e),
+		None => {
+			let mut err = None
+			let mut done = false
+			let builder = StringBuilder.make(16)
+
+			while (!done) {
+				let c = parserImplHelper.currentCodePoint
+				match (c) {
+					0x22 => { // '"'
+						next(parserImplHelper)
+						done = true
+						break
+					},
+					-1 => {
+						// just end the loop without setting done to true
+						break
+					},
+					c => {
+						next(parserImplHelper)
+						StringBuilder.appendUnicodeCodePoint(c, builder)
+						void
+					}
+				}
+			}
+
+			match (err) {
+				None => {
+					if (done) {
+						let s = StringBuilder.toString(builder)
+						Ok(s)
+					} else {
+						if (isAtEndOfInput(parserImplHelper)) {
+							Err(UnexpectedEndOfInput)
+						} else {
+							Err(buildUnexpectedTokenError(parserImplHelper))
+						}
+					}
+				},
+				Some(e) => Err(e)
+			}
+		}
+	}
+}
+, parseStringValue = (parserImplHelper: JSONParserImplHelper) => {
+	match (parseString(parserImplHelper)) {
+		Ok(s) => Ok(JSONString(s)),
+		Err(e) => Err(e)
+	}
+}
+, parseArray = (parserImplHelper: JSONParserImplHelper) => {
+	match (expectCodePointAndAdvance(0x5B, parserImplHelper)) { // '['
+		Some(e) => Err(e),
+		None => {
+			let mut err = None
+
+			let mut elems = [] : List<JSON>
+
+			let mut done = false
+
+			while (!done) {
+				let c = parserImplHelper.currentCodePoint
+				match (c) {
+					0x2C => { // ','
+						next(parserImplHelper)
+						skipWhiteSpace(parserImplHelper)
+					},
+					0x5D => { // ']'
+						next(parserImplHelper)
+						done = true
+						break
+					},
+					-1 => {
+						// just end the loop without setting done to true
+						break
+					},
+					_ => {
+						// note that parseValue skips initial and final whitespace
+						match (parseValue(parserImplHelper)) {
+							Ok(elem) => {
+								elems = [elem, ...elems]
+								void
+							},
+							Err(e) => {
+								err = Some(e)
+								break
+							}
+						}
+					},
+				}
+			}
+
+			match(err) {
+				Some(e) => Err(e),
+				None => {
+					if (done) {
+						Ok(JSONArray(List.reverse(elems)))
+					} else {
+						if (isAtEndOfInput(parserImplHelper)) {
+							Err(UnexpectedEndOfInput)
+						} else {
+							Err(buildUnexpectedTokenError(parserImplHelper))
+						}
+					}
+				}
+			}
+		}
+	}
+}
+, parseObject = (parserImplHelper: JSONParserImplHelper) => {
+	match (expectCodePointAndAdvance(0x7B, parserImplHelper)) { // '{'
+		Some(e) => Err(e),
+		None => {
+			let mut err = None
+
+			let mut entries = [] : List<(String,JSON)>
+
+			let mut done = false
+			let mut first = true
+
+			// one iteration of this loop should correspond to a key-value pair
+			while (!done) {
+				skipWhiteSpace(parserImplHelper)
+				
+				let c = parserImplHelper.currentCodePoint
+				match (c) {
+					-1 => {
+						err = Some(UnexpectedEndOfInput)
+						break
+					},
+					0x2C => { // ','
+						if (first) {
+							err = Some(buildUnexpectedTokenError)
+							break
+						} else {
+							next(parserImplHelper)
+						}
+					},
+					0x7D => { // '}'
+						next(parserImplHelper)
+						done = true
+						break
+					},
+					_ => {
+						// A new entry in current object.
+						// Just call parseString directly. In case the current character id not '"', it will return an error we can pass along.
+						match (parseString(parserImplHelper)) {
+							Ok(key) => {
+								skipWhiteSpace(parserImplHelper)
+
+								match (expectCodePointAndAdvance(0x3A, parserImplHelper)) { // ':'
+									None => {
+										// note that parseValue skips initial and final whitespace
+										match (parseValue(parserImplHelper)) {
+											Ok(value) => {
+												entries = [(key,value), ...entries]
+												first = false
+												void
+											},
+											Err(e) => {
+												err = Some(e)
+												break
+											}
+										}
+									},
+									Some(e) => {
+										err = Some(e)
+										break
+									}
+								}
+							},
+							Err(e) => {
+								err = Some(e)
+								break
+							}
+						}
+					},
+				}
+			} // end of entry loop
+
+			match(err) {
+				Some(e) => Err(e),
+				None => {
+					if (done) {
+						Ok(JSONObject(List.reverse(entries)))
+					} else {
+						// This brand is not expected to actually execute, 
+						// but in case it does, may just as well do the right thing.
+						if (isAtEndOfInput(parserImplHelper)) {
+							Err(UnexpectedEndOfInput)
+						} else {
+							Err(buildUnexpectedTokenError(parserImplHelper))
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+export let parse : String -> Result<JSON,Exception> = (str: String) => {
+	let reader = StringReader.make(str)
+
+	let parserImplHelper = {
+		reader: reader,
+		currentCodePoint: StringReader.readCodePointFast(reader),
+		pos: 0
+	}: JSONParserImplHelper
+
+	let root = parseValue(parserImplHelper)
+
+	skipWhiteSpace(parserImplHelper)
+
+	if (isAtEndOfInput(parserImplHelper)) {
+		root
+	} else {
+		Err(buildUnexpectedTokenError(parserImplHelper))
+	}
+}
