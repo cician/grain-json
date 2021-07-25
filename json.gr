@@ -1112,13 +1112,17 @@ let isInterTokenWhiteSpace = (codePoint: Number) => {
 	}
 }
 
+let _END_OF_INPUT = -1
+
 let isAtEndOfInput = (parserImplHelper: JSONParserImplHelper) => {
-	parserImplHelper.currentCodePoint == -1
+	parserImplHelper.currentCodePoint == _END_OF_INPUT
 }
 
 let next = (parserImplHelper: JSONParserImplHelper) => {
-	parserImplHelper.currentCodePoint = StringReader.readCodePointFast(parserImplHelper.reader)
+	let c = StringReader.readCodePointFast(parserImplHelper.reader)
+	parserImplHelper.currentCodePoint = c
 	parserImplHelper.pos = parserImplHelper.pos + 1
+	c
 }
 
 // let pollCodePoint = (parserImplHelper: JSONParserImplHelper) => {
@@ -1130,13 +1134,19 @@ let skipWhiteSpace = (parserImplHelper: JSONParserImplHelper) => {
 	// could remove as an optimization
 	while (isInterTokenWhiteSpace(parserImplHelper.currentCodePoint) && !isAtEndOfInput(parserImplHelper)) {
 		next(parserImplHelper)
+		void
 	}
 }
 
 let buildUnexpectedTokenError = (parserImplHelper: JSONParserImplHelper) => {
-	let char = Char.fromCode(parserImplHelper.currentCodePoint)
-	let pos = parserImplHelper.pos
-	UnexpectedToken(char, pos)
+	let codePoint = parserImplHelper.currentCodePoint
+	if (codePoint == _END_OF_INPUT) {
+		UnexpectedEndOfInput
+	} else {
+		let char = Char.fromCode(parserImplHelper.currentCodePoint)
+		let pos = parserImplHelper.pos
+		UnexpectedToken(char, pos)
+	}
 }
 
 let expectCodePointAndAdvance = (expectedCodePoint: Number, parserImplHelper: JSONParserImplHelper) => {
@@ -1146,8 +1156,6 @@ let expectCodePointAndAdvance = (expectedCodePoint: Number, parserImplHelper: JS
 	if (c == expectedCodePoint) {
 		next(parserImplHelper)
 		None
-	} else if (c == -1) {
-		Some(UnexpectedEndOfInput)
 	} else {
 		Some(buildUnexpectedTokenError(parserImplHelper))
 	}
@@ -1163,12 +1171,10 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 		0x74 => parseTrueValue(parserImplHelper), // 't'
 		0x66 => parseFalseValue(parserImplHelper), // 'f'
 		0x6E => parseNullValue(parserImplHelper), // 'n'
-		// c => parseNumber(tkn),
+		// TODO Check if having a match case for each digit would be faster or not.
+		c when (c >= 0x30 && c <= 0x39) || c == 0x2D => parseNumberValue(parserImplHelper), // '0'..'9' or '-'
 		c => {
 			Err(buildUnexpectedTokenError(parserImplHelper))
-		},
-		-1 => {
-			Err(UnexpectedEndOfInput)
 		}
 	}
 
@@ -1269,7 +1275,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 						done = true
 						break
 					},
-					-1 => {
+					_END_OF_INPUT => {
 						// just end the loop without setting done to true
 						break
 					},
@@ -1348,9 +1354,6 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 										digit -= 55 // (65 - 10)
 									} else if (hexDigitCodePoint >= 97 && hexDigitCodePoint <= 102) { // a..f
 										digit -= 87 // (97 - 10)
-									} else if (hexDigitCodePoint == -1) {
-										err = Some(UnexpectedEndOfInput)
-										break
 									} else {
 										err = Some(buildUnexpectedTokenError(parserImplHelper))
 										break
@@ -1360,6 +1363,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									codePoint = codePoint | (digit << shift)
 
 									next(parserImplHelper)
+									void
 								}
 
 								match (err) {
@@ -1401,10 +1405,6 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									}
 								}
 							},
-							-1 => {
-								err = Some(UnexpectedEndOfInput)
-								break
-							},
 							_ => {
 								// JSON doesn't allow arbitrary characters to be preceded by backslash escape.
 								// Only the ones above.
@@ -1431,11 +1431,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 						let s = StringBuilder.toString(builder)
 						Ok(s)
 					} else {
-						if (isAtEndOfInput(parserImplHelper)) {
-							Err(UnexpectedEndOfInput)
-						} else {
-							Err(buildUnexpectedTokenError(parserImplHelper))
-						}
+						Err(buildUnexpectedTokenError(parserImplHelper))
 					}
 				},
 				Some(e) => Err(e)
@@ -1447,6 +1443,116 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 	match (parseString(parserImplHelper)) {
 		Ok(s) => Ok(JSONString(s)),
 		Err(e) => Err(e)
+	}
+}
+, parseNumberValue = (parserImplHelper: JSONParserImplHelper) => {
+	// First char can optionally be a minus sign.
+	let mut c = parserImplHelper.currentCodePoint
+	let isNegative = c == 0x2D  // '-'
+	if (isNegative) {
+		c = next(parserImplHelper)
+	}
+
+	let mut err = None
+
+	let mut result = 0
+
+	// Note on performance: the hope here is to keep calculations in a way to
+	// do at least the intermediate operations with Simple Numbers (non heap
+	// allocated). If there's no fractional part then the resulting number
+	// itself is packed ti the "pointer" / value and only an instance of
+	// JSONNumber is allocated on the heap. If the number has a fractional part
+	// or a negative exponent then the final number will be heap allocated.
+	// If the number doesn't fit 31 bits then intermetdiate calculations will
+	// allocate numbers on the heap. This could be alleviated by doing
+	// intermediate calculations with raw wasm numbers, but it would add some
+	// complexity. Also 64bit ints operations are surprisingly dog slow. At
+	// least in current Grains's runtime (node.js?).
+
+	// After that, the first/second char can only be a decimal digit ('0'..'9').
+	match (c) {
+		0x30 => { // '0'
+			// JSON doesn't allow numbers with additional leading zeros like
+			// "01". Which means that if a number starts with zero then the
+			// integer part is just zero and the next one can only be one of
+			// '.', 'e' or 'E'.
+
+			c = next(parserImplHelper)
+			match (c) {
+				0x2E => void, // '.'
+				0x65 => void, // 'e'
+				0x45 => void, // 'E'
+				_ => {
+					err = Some(buildUnexpectedTokenError(parserImplHelper))
+				}
+			}
+		},
+		x when x >= 0x31 && x <= 0x39 => { // '1'..'9'
+			for (; ;) {
+				let digit = c - 0x30
+
+				result = result * 10 + digit
+
+				c = next(parserImplHelper)
+
+				if (c < 0x30 || c > 0x39) {
+					break
+				}
+			}
+
+			void
+		},
+		_ => {
+			// The integer part of the number has to have at least one digit.
+			// JSON doesn't allow numbers starting with decimal separator like ".1".
+			err = Some(buildUnexpectedTokenError(parserImplHelper))
+		}
+	}
+
+	// Optional fractional part of the number.
+	// let mut fractionalPart = 0
+	
+	if (Option.isNone(err) && c == 0x2E) { // '.'
+		// This way each iteration allocates a number on the heap!
+
+		c = next(parserImplHelper)
+
+		// let mut decimalPos = 10
+		let mut denominator = 1
+		for (; c >= 0x30 && c <= 0x39; ) {
+			let digit = c - 0x30
+
+			result = result * 10 + digit
+
+			//fractionalPart = fractionalPart + (digit / decimalPos)
+			// decimalPos = decimalPos * 10
+			denominator = denominator * 10
+
+			c = next(parserImplHelper)
+		}
+		result /= denominator
+
+		// print(fractionalPart)
+	}
+
+	// TODO Optional exponential part of the number.
+	if (Option.isNone(err) && (c == 0x65 || c == 0x45)) { // 'e' or 'E'
+		// can start with optional plus or minus sign
+		
+		// folowed by one or more digits (0-9)
+
+		void
+	}
+	
+	match(err) {
+		Some(e) => Err(e),
+		None => {
+			//let mut result = integerPart + fractionalPart
+			if (isNegative) {
+				result = 0 - result
+			}
+			Ok(JSONNumber(result))
+		}
 	}
 }
 , parseArray = (parserImplHelper: JSONParserImplHelper) => {
@@ -1471,7 +1577,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 						done = true
 						break
 					},
-					-1 => {
+					_END_OF_INPUT => {
 						// just end the loop without setting done to true
 						break
 					},
@@ -1497,11 +1603,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 					if (done) {
 						Ok(JSONArray(List.reverse(elems)))
 					} else {
-						if (isAtEndOfInput(parserImplHelper)) {
-							Err(UnexpectedEndOfInput)
-						} else {
-							Err(buildUnexpectedTokenError(parserImplHelper))
-						}
+						Err(buildUnexpectedTokenError(parserImplHelper))
 					}
 				}
 			}
@@ -1525,7 +1627,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 				
 				let c = parserImplHelper.currentCodePoint
 				match (c) {
-					-1 => {
+					_END_OF_INPUT => {
 						err = Some(UnexpectedEndOfInput)
 						break
 					},
@@ -1535,6 +1637,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 							break
 						} else {
 							next(parserImplHelper)
+							void
 						}
 					},
 					0x7D => { // '}'
@@ -1587,11 +1690,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 					} else {
 						// This brand is not expected to actually execute, 
 						// but in case it does, may just as well do the right thing.
-						if (isAtEndOfInput(parserImplHelper)) {
-							Err(UnexpectedEndOfInput)
-						} else {
-							Err(buildUnexpectedTokenError(parserImplHelper))
-						}
+						Err(buildUnexpectedTokenError(parserImplHelper))
 					}
 				}
 			}

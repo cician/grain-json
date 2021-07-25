@@ -79,6 +79,26 @@ let printSomething = () => {
 	print(Json.parse("\tnull \r\n"))
 	print(Json.parse("true"))
 	print(Json.parse("false"))
+	print(Json.parse("-10"))
+	print(Json.parse("-2"))
+	print(Json.parse("-1"))
+	print(Json.parse("1"))
+	print(Json.parse("2"))
+	print(Json.parse("10"))
+	print(Json.parse("100"))
+	print(Json.parse("1000"))
+	print(Json.parse("0.1"))
+	print(Json.parse("0.123"))
+	print(Json.parse("1.123"))
+	print(Json.parse("0e0")) // 0
+	print(Json.parse("1e0")) // 1
+	print(Json.parse("1e1")) // 10
+	print(Json.parse("1e10")) // 100
+	print(Json.parse("1e100")) // 1000
+	print(Json.parse("-1e10")) // -100
+	print(Json.parse("1e-1")) // 0.1
+	print(Json.parse("01")) // this should fail
+	print(Json.parse(".1")) // this should fail
 	print(Json.parse("\"Hello world!\""))
 	print(Json.parse("\"A \"quoted\" string\""))
 	print(Json.parse("{}"))

@@ -43,7 +43,7 @@ For now you need to have Grain already installed and on the path. Then just laun
 	- [x] Booleans
 	- [x] Arrays
 	- [x] Objects
-	- [ ] String escape sequence parsing
+	- [x] String escape sequence parsing
 	- [ ] Numbers
 - [x] License
 - [ ] Tests
