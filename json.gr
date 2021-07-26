@@ -1275,7 +1275,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 						done = true
 						break
 					},
-					_END_OF_INPUT => {
+					-1 => {
 						// just end the loop without setting done to true
 						break
 					},
@@ -1598,7 +1598,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 						done = true
 						break
 					},
-					_END_OF_INPUT => {
+					-1 => {
 						// just end the loop without setting done to true
 						break
 					},
@@ -1648,7 +1648,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 				
 				let c = parserImplHelper.currentCodePoint
 				match (c) {
-					_END_OF_INPUT => {
+					-1 => {
 						err = Some(UnexpectedEndOfInput)
 						break
 					},
