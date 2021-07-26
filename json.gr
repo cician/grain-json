@@ -1510,11 +1510,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 	}
 
 	// Optional fractional part of the number.
-	// let mut fractionalPart = 0
-	
 	if (Option.isNone(err) && c == 0x2E) { // '.'
-		// This way each iteration allocates a number on the heap!
-
 		c = next(parserImplHelper)
 
 		// let mut decimalPos = 10
@@ -1524,25 +1520,50 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 
 			result = result * 10 + digit
 
-			//fractionalPart = fractionalPart + (digit / decimalPos)
-			// decimalPos = decimalPos * 10
 			denominator = denominator * 10
 
 			c = next(parserImplHelper)
 		}
 		result /= denominator
-
-		// print(fractionalPart)
 	}
 
-	// TODO Optional exponential part of the number.
+	// Optional exponential part of the number.
 	if (Option.isNone(err) && (c == 0x65 || c == 0x45)) { // 'e' or 'E'
+		c = next(parserImplHelper)
+
 		// can start with optional plus or minus sign
+		let isExponentNegative = match(c) {
+			0x2D => { // '-'
+				c = next(parserImplHelper)
+				true
+			},
+			0x2B => { // '+'
+				c = next(parserImplHelper)
+				false
+			},
+			_ => {
+				false
+			}
+		}
 		
 		// folowed by one or more digits (0-9)
 
+		let mut exponent = 0
+		for (; c >= 0x30 && c <= 0x39; ) {
+			let digit = c - 0x30
+
+			exponent = exponent * 10 + digit
+
+			c = next(parserImplHelper)
+		}
+
 		void
 	}
+
+	// Note that unlike all other JSON value types there's no explicit ending
+	// character like ('"' for strings, ']' for arrays,'}' for objects etc). We
+	// just leave the parser state at current position and the reading of next
+	// token will succeed or fail, but number parsing just ends here.
 	
 	match(err) {
 		Some(e) => Err(e),
