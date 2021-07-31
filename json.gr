@@ -1477,17 +1477,14 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 			// JSON doesn't allow numbers with additional leading zeros like
 			// "01". Which means that if a number starts with zero then the
 			// integer part is just zero and the next one can only be one of
-			// '.', 'e' or 'E'.
-
+			// '.', 'e' or 'E'. In any case all that needs to be done here is
+			// to advance over the zero character and proceed to the optional
+			// fractional and exponential parts. If another digit follows then
+			// a parsing error will occur as expected, but implicitly because
+			// this function finishes with the parser positioned on a digit
+			// and not on a token expected after a number like ',', ']', '}' or
+			// EOF.
 			c = next(parserImplHelper)
-			match (c) {
-				0x2E => void, // '.'
-				0x65 => void, // 'e'
-				0x45 => void, // 'E'
-				_ => {
-					err = Some(buildUnexpectedTokenError(parserImplHelper))
-				}
-			}
 		},
 		x when x >= 0x31 && x <= 0x39 => { // '1'..'9'
 			for (; ;) {
