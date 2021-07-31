@@ -598,11 +598,12 @@ let makeCompactJSONWriter = (printer: Printer) => {
 	// emitEscapedQuotedString function directly to avoid allocating the closue
 	// for each input string.
 	let emitCodePoint = (codePoint: Number) => {
-		// For the compact formatting only escape code points 0..31 as required
-		// by ECMA-404 (the so called "C0" control point group). For the non
-		// pretty printed case we don't want to escape more than what is
-		// stricty required to avoid increasing the output size.
-		if (codePoint > 31) {
+		// For the compact formatting only escape backslash, double quotes and
+		// code points 0..31 (the so called "C0" control point group) as
+		// required by ECMA-404. For the non pretty printed case we don't want
+		// to escape more than what is stricty required to avoid increasing the
+		// output size.
+		if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C) {
 			printer.writeUnicodeCodePoint(codePoint)
 		} else {
 			emitEscapedCodePoint(codePoint, printer)
@@ -943,7 +944,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 	let emitCodePoint =
 		if (!format.escapeAllControlPoints && !format.escapeNonASCII) {
 			(codePoint: Number) => {
-				if (codePoint > 31) {
+				if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C) {
 					printer.writeUnicodeCodePoint(codePoint)
 				} else {
 					emitEscapedCodePoint(codePoint, printer)
@@ -954,7 +955,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 			// escaped code points are those in the range of ASCII chacarcters
 			// from 31 to 127.
 			(codePoint: Number) => {
-				if (codePoint > 31 && codePoint < 128 ) {
+				if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C && codePoint < 128) {
 					printer.writeUnicodeCodePoint(codePoint)
 				} else {
 					emitEscapedCodePoint(codePoint, printer)
@@ -966,7 +967,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 			// There could be more control points or otherwise escape worthy
 			// codepoints, but covering that would be overkill.
 			(codePoint: Number) => {
-				if ((codePoint > 31 && codePoint < 127) || codePoint > 159) {
+				if ((codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C && codePoint < 127) || codePoint > 159) {
 					printer.writeUnicodeCodePoint(codePoint)
 				} else {
 					emitEscapedCodePoint(codePoint, printer)
@@ -978,7 +979,7 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, printer: Printer) =
 			// escapeNonASCII=true, but also escape the ASCII control codepoint
 			// 127 (Delete).
 			(codePoint: Number) => {
-				if (codePoint > 31 && codePoint < 127) {
+				if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C && codePoint < 127) {
 					// fast path for chars that never need any escaping
 					printer.writeUnicodeCodePoint(codePoint)
 				} else {
