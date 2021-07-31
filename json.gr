@@ -1455,7 +1455,9 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 
 	let mut err = None
 
-	let mut result = 0
+	let mut significand = 0
+	let mut exponent = 0
+	let mut isExponentNegative = false
 
 	// Note on performance: the hope here is to keep calculations in a way to
 	// do at least the intermediate operations with Simple Numbers (non heap
@@ -1491,7 +1493,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 			for (; ;) {
 				let digit = c - 0x30
 
-				result = result * 10 + digit
+				significand = significand * 10 + digit
 
 				c = next(parserImplHelper)
 
@@ -1514,17 +1516,19 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 		c = next(parserImplHelper)
 
 		// let mut decimalPos = 10
-		let mut denominator = 1
+		// let mut denominator = 1
 		for (; c >= 0x30 && c <= 0x39; ) {
 			let digit = c - 0x30
 
-			result = result * 10 + digit
+			significand = significand * 10 + digit
 
-			denominator = denominator * 10
+			// denominator = denominator * 10
 
 			c = next(parserImplHelper)
+
+			exponent = exponent - 1
 		}
-		result /= denominator
+		// result /= denominator
 	}
 
 	// Optional exponential part of the number.
@@ -1532,7 +1536,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 		c = next(parserImplHelper)
 
 		// can start with optional plus or minus sign
-		let isExponentNegative = match(c) {
+		isExponentNegative = match(c) {
 			0x2D => { // '-'
 				c = next(parserImplHelper)
 				true
@@ -1548,13 +1552,19 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 		
 		// folowed by one or more digits (0-9)
 
-		let mut exponent = 0
+		let mut explicitExponent = 0
 		for (; c >= 0x30 && c <= 0x39; ) {
 			let digit = c - 0x30
 
-			exponent = exponent * 10 + digit
+			explicitExponent = explicitExponent * 10 + digit
 
 			c = next(parserImplHelper)
+		}
+
+		if (isExponentNegative) {
+			exponent = exponent - explicitExponent
+		} else {
+			exponent = exponent + explicitExponent
 		}
 
 		void
@@ -1568,7 +1578,26 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 	match(err) {
 		Some(e) => Err(e),
 		None => {
-			//let mut result = integerPart + fractionalPart
+			let mut result = significand
+
+			if (exponent != 0) {
+				// This is just a temporary naive implementation.
+
+				if (exponent > 0) {
+					let mut factor = 1
+					for (let mut i=0; i<exponent; i += 1) {
+						factor = factor * 10
+					}
+					result = result * factor
+				} else {
+					let mut factor = 1
+					for (let mut i=0; i<(0-exponent); i += 1) {
+						factor = factor * 10
+					}
+					result = result / factor
+				}
+			}
+
 			if (isNegative) {
 				result = 0 - result
 			}
