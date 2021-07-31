@@ -44,7 +44,10 @@ For now you need to have Grain already installed and on the path. Then just laun
 	- [x] Arrays
 	- [x] Objects
 	- [x] String escape sequence parsing
+		- [ ] Re-evaluate handling invalid sequences of UTF16 surrogates. The fact that node accepts them doesn't mean we must to. May potentially result in security issues down the line.
 	- [ ] Numbers
+		- [ ] Handle large exponential numbers. Need to parse as 64 bit floats.
+		- [ ] Evaluate if parsing options make sense. Or maybe just always parse to floats if there's a fractional part or exponential?
 - [x] License
 - [ ] Tests
 - [ ] Docs

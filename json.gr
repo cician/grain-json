@@ -1299,7 +1299,16 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									prevHighSurrogate = -1
 								}
 							},
-							0x08 => { // '\b' (backspace)
+							0x2F => { // '/'
+								StringBuilder.appendUnicodeCodePoint(0x2F, builder)
+								next(parserImplHelper)
+								if (prevHighSurrogate != -1) {
+									StringBuilder.appendUnicodeCodePoint(prevHighSurrogate, builder)
+									prevHighSurrogate = -1
+								}
+							},
+							0x62 => { // letter 'b' as in Backspace
+								// emit backspace control code
 								StringBuilder.appendUnicodeCodePoint(0x08, builder)
 								next(parserImplHelper)
 								if (prevHighSurrogate != -1) {
@@ -1307,7 +1316,8 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									prevHighSurrogate = -1
 								}
 							},
-							0x0C => { // '\f' (form feed)
+							0x66 => { // letter 'f' as in Form Feed
+								// emit Form Feed control code
 								StringBuilder.appendUnicodeCodePoint(0x0C, builder)
 								next(parserImplHelper)
 								if (prevHighSurrogate != -1) {
@@ -1315,7 +1325,8 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									prevHighSurrogate = -1
 								}
 							},
-							0x0A => { // '\n' (line feed)
+							0x6E => { // letter 'n' as in New line
+								// emit Line Feed control code
 								StringBuilder.appendUnicodeCodePoint(0x0A, builder)
 								next(parserImplHelper)
 								if (prevHighSurrogate != -1) {
@@ -1323,7 +1334,8 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									prevHighSurrogate = -1
 								}
 							},
-							0x0D => { // '\r' (carriage return)
+							0x72 => { // letter 'r' as in carriage Return
+								// emit Carriage Return control code
 								StringBuilder.appendUnicodeCodePoint(0x0D, builder)
 								next(parserImplHelper)
 								if (prevHighSurrogate != -1) {
@@ -1331,7 +1343,8 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 									prevHighSurrogate = -1
 								}
 							},
-							0x09 => { // '\t' (tab)
+							0x74 => { // letter 't' as in Tab
+								// emit Tab control code
 								StringBuilder.appendUnicodeCodePoint(0x09, builder)
 								next(parserImplHelper)
 								if (prevHighSurrogate != -1) {
