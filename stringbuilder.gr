@@ -168,6 +168,7 @@ export let appendUnicodeCodePoint = (codePoint: Number, builder: StringBuilder) 
 	// writeUtf8CodePoint. Currently it's is not exposted, but perhaps more
 	// importantly, embedding this code enables some optimizations and to know
 	// the number of bytes for the code point without computing it twice.
+	// Reference https://en.wikipedia.org/wiki/UTF-8#Encoding
 
 	let (>>>) = WasmI32.shrU
 	let (-) = WasmI32.sub
@@ -203,8 +204,9 @@ export let appendUnicodeCodePoint = (codePoint: Number, builder: StringBuilder) 
 
 		let dstPtr = WasmI32.fromGrain(builder.buffer) + _BYTES_VALUE_OFFSET + currentSize
 
-		let high = ((codePoint >>> 6n) & 0x1Fn) | 0xC0n
-		let low = (codePoint & 0x3Fn) | 0x08n
+		let high = ((codePoint >>> 6n) & 0b000_11111n) | 0b110_00000n
+		let low =  ( codePoint         & 0b00_111111n) | 0b10_000000n
+				
 		WasmI32.store8(dstPtr, high, 0n)
 		WasmI32.store8(dstPtr + 1n, low, 0n)
 		
@@ -216,9 +218,9 @@ export let appendUnicodeCodePoint = (codePoint: Number, builder: StringBuilder) 
 
 		let dstPtr = WasmI32.fromGrain(builder.buffer) + _BYTES_VALUE_OFFSET + currentSize
 
-		let high = ((codePoint >>> 12n) & 0x0Fn) | 0xE0n
-		let mid = ((codePoint >>> 6n) & 0x3Fn) | 0x80n
-		let low = (codePoint & 0x3Fn) | 0x80n
+		let high = ((codePoint >>> 12n) & 0b0000_1111n) | 0b1110_0000n
+		let mid =  ((codePoint >>> 6n)  & 0b00_111111n) | 0b10_000000n
+		let low =  ( codePoint          & 0b00_111111n) | 0b10_000000n
 		WasmI32.store8(dstPtr, high, 0n)
 		WasmI32.store8(dstPtr + 1n, mid, 0n)
 		WasmI32.store8(dstPtr + 2n, low, 0n)
@@ -231,10 +233,10 @@ export let appendUnicodeCodePoint = (codePoint: Number, builder: StringBuilder) 
 
 		let dstPtr = WasmI32.fromGrain(builder.buffer) + _BYTES_VALUE_OFFSET + currentSize
 
-		let high = ((codePoint >>> 18n) & 0x07n) | 0xF0n
-		let mid1 = ((codePoint >>> 12n) & 0x3Fn) | 0x80n
-		let mid2 = ((codePoint >>> 6n) & 0x3Fn) | 0x80n
-		let low = (codePoint & 0x3Fn) | 0x80n
+		let high = ((codePoint >>> 18n) & 0b00000_111n) | 0b11110_000n
+		let mid1 = ((codePoint >>> 12n) & 0b00_111111n) | 0b10_000000n
+		let mid2 = ((codePoint >>> 6n)  & 0b00_111111n) | 0b10_000000n
+		let low =  ( codePoint          & 0b00_111111n) | 0b10_000000n
 		WasmI32.store8(dstPtr, high, 0n)
 		WasmI32.store8(dstPtr + 1n, mid1, 0n)
 		WasmI32.store8(dstPtr + 2n, mid2, 0n)
