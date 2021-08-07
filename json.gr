@@ -1126,10 +1126,6 @@ let next = (parserImplHelper: JSONParserImplHelper) => {
   c
 }
 
-// let pollCodePoint = (parserImplHelper: JSONParserImplHelper) => {
-// 	if (parserImplHelper.currentCodePoint ==)
-// }
-
 let skipWhiteSpace = (parserImplHelper: JSONParserImplHelper) => {
   // isAtEndOfInput is not strictly necessary here
   // could remove as an optimization

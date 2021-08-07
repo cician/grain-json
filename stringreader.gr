@@ -88,7 +88,6 @@ export let readCodePointFast = (reader: StringReader) => {
   let (<) = WasmI32.ltU
   let (<=) = WasmI32.leU
   let (==) = WasmI32.eq
-//   let (+) = WasmI32.add
 
   let strPtr = WasmI32.fromGrain(reader.string)
 
