@@ -1,4 +1,4 @@
-import Json from "json"
+import Json from "./json"
 import Result from "result"
 import Exception from "runtime/exception"
 

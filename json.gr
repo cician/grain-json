@@ -1,7 +1,7 @@
 import String from "string"
 import Char from "char"
 import List from "list"
-import StringBuilder from "stringbuilder"
+import StringBuilder from "./stringbuilder"
 import Option from "option"
 import Number from "number"
 import Exception from "runtime/exception"
@@ -13,7 +13,7 @@ import NumberUtils from "runtime/numberUtils"
 import Tags from "runtime/unsafe/tags"
 import Numbers from "runtime/numbers"
 import Memory from "runtime/unsafe/memory"
-import StringReader from "stringreader"
+import StringReader from "./stringreader"
 
 export enum JSON {
   JSONNull,
@@ -323,10 +323,12 @@ let printNumberWasmI64 = (value: WasmI64, printer: Printer) => {
   none
 }
 
+@disableGC
 let isFinite = (value: WasmF64) => {
   WasmF64.eq(WasmF64.sub(value, value), 0.W)
 }
 
+@disableGC
 let isNaN = (value: WasmF64) => {
   WasmF64.ne(value, value)
 }
