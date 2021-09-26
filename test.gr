@@ -5,7 +5,7 @@ import Exception from "runtime/exception"
 let testPrint = (result: Result<String,Exception>) => {
   match (result) {
     Ok(s) => print(s),
-    Err(e) => Exception.printException(e)
+    Err(e) => print(e)
   }
 }
 
@@ -19,7 +19,9 @@ let printSomething = () => {
     Json.JSONBoolean(false),
     Json.JSONNumber(2),
     Json.JSONNumber(-2),
+    Json.JSONNumber(0),
     Json.JSONNumber(-0),
+    Json.JSONNumber(1152921504606846976),
     // Numbers with large exponents not yet handled in parsing.
     // Json.JSONNumber(1E200),
     // Json.JSONNumber(1E-200),
@@ -128,8 +130,6 @@ let printSomething = () => {
   print(Json.parse("\"\u005Cu6000 \u005Cud800\u005Cudc82 \u005Cud83e\u005Cudd18\u005Cud83c\u005Cudffb \u005Cud83c\u005Cudff4\u005Cudb40\u005Cudc67\u005Cudb40\u005Cudc62\u005Cudb40\u005Cudc77\u005Cudb40\u005Cudc6c\u005Cudb40\u005Cudc73\u005Cudb40\u005Cudc7f\"")) // 怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿
 
   
-  
-
   match (Json.parse("\"怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿\"")) {
   // match (Json.parse("\"\u005Cud800\"")) {
     Ok(json) => {
@@ -148,9 +148,8 @@ let printSomething = () => {
         } : Json.FormattingSettings)
       )
     },
-    Err(e) => Exception.printException(e)
+    Err(e) => print(e)
   }
-  void
 
   print("round trip:")
   testPrint(Json.toStringCompact(test))
