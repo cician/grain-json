@@ -1463,7 +1463,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
   // Note on performance: the hope here is to keep calculations in a way to
   // do at least the intermediate operations with Simple Numbers (non heap
   // allocated). If there's no fractional part then the resulting number
-  // itself is packed ti the "pointer" / value and only an instance of
+  // itself is packed into the "pointer" / value and only an instance of
   // JSONNumber is allocated on the heap. If the number has a fractional part
   // or a negative exponent then the final number will be heap allocated.
   // If the number doesn't fit 31 bits then intermetdiate calculations will
@@ -1681,7 +1681,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
           },
           0x2C => { // ','
             if (first) {
-              err = Some(buildUnexpectedTokenError)
+              err = Some(buildUnexpectedTokenError(parserImplHelper))
               break
             } else {
               next(parserImplHelper)
