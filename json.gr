@@ -286,9 +286,11 @@ let printNumberWasmI32 = (value: WasmI32, buffer: Buffer.Buffer) => {
   let s = NumberUtils.itoa32(value, 10n)
   
   Memory.incRef(WasmI32.fromGrain(Buffer.addString))
+  Memory.incRef(WasmI32.fromGrain(s))
+  Memory.incRef(WasmI32.fromGrain(buffer))
   Buffer.addString(s, buffer)
 
-  Memory.decRef(WasmI32.fromGrain(buffer))
+  Memory.decRef(WasmI32.fromGrain(s))
 
   let none = None
   Memory.incRef(WasmI32.fromGrain(none))
@@ -300,9 +302,11 @@ let printNumberWasmI64 = (value: WasmI64, buffer: Buffer.Buffer) => {
   let s = NumberUtils.itoa64(value, 10n)
   
   Memory.incRef(WasmI32.fromGrain(Buffer.addString))
+  Memory.incRef(WasmI32.fromGrain(s))
+  Memory.incRef(WasmI32.fromGrain(buffer))
   Buffer.addString(s, buffer)
 
-  Memory.decRef(WasmI32.fromGrain(buffer))
+  Memory.decRef(WasmI32.fromGrain(s))
   
   let none = None
   Memory.incRef(WasmI32.fromGrain(none))
@@ -331,7 +335,11 @@ let printNumberWasmF64 = (value: WasmF64, buffer: Buffer.Buffer) => {
       let s = NumberUtils.dtoa(value)
       
       Memory.incRef(WasmI32.fromGrain(Buffer.addString))
+      Memory.incRef(WasmI32.fromGrain(s))
+      Memory.incRef(WasmI32.fromGrain(buffer))
       Buffer.addString(s, buffer)
+
+      Memory.decRef(WasmI32.fromGrain(s))
 
       let none = None
       Memory.incRef(WasmI32.fromGrain(none))
@@ -354,8 +362,6 @@ let printNumberWasmF64 = (value: WasmF64, buffer: Buffer.Buffer) => {
         makeInfException()
       }
     }
-
-  Memory.decRef(WasmI32.fromGrain(buffer))
 
   result
 }
