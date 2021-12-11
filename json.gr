@@ -1469,8 +1469,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
   // If the number doesn't fit 31 bits then intermetdiate calculations will
   // allocate numbers on the heap. This could be alleviated by doing
   // intermediate calculations with raw wasm numbers, but it would add some
-  // complexity. Also 64bit ints operations are surprisingly dog slow. At
-  // least in current Grains's runtime (node.js?).
+  // complexity.
 
   // After that, the first/second char can only be a decimal digit ('0'..'9').
   match (c) {
