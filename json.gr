@@ -925,8 +925,6 @@ let makePrettyPrintJSONWriter = (format: FormattingSettings, buffer: Buffer.Buff
     NoIndentation => (indentationLevel) => void
   }
 
-  // FIXME the if expressions below leak memory (https://github.com/grain-lang/grain/issues/774)
-
   // As an optimization prepare a different closure function for each
   // combination of escaping options. This ways we can avoid unnecessary
   // branching in the code executed for each character. What is most
