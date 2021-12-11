@@ -1244,9 +1244,6 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 }
 , parseString = (parserImplHelper: JSONParserImplHelper) => {
   // TODO Reuse the buffer for each string.
-  // This is first implementation to just keep going with overall
-  // parsing code and will need to be revised... For now no escape
-  // handling at all!
   match (expectCodePointAndAdvance(0x22, parserImplHelper)) { // '"'
     Some(e) => Err(e),
     None => {
