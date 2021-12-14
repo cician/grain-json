@@ -1,0 +1,30 @@
+import Json from "./json"
+import Result from "result"
+
+// Parsing
+
+// Simple values of each type
+
+assert Json.parse("null") == Ok(Json.JSONNull)
+assert Json.parse("true") == Ok(Json.JSONBoolean(true))
+assert Json.parse("false") == Ok(Json.JSONBoolean(false))
+assert Json.parse("\"\"") == Ok(Json.JSONString(""))
+assert Json.parse("0") == Ok(Json.JSONNumber(0))
+assert Json.parse("[]") == Ok(Json.JSONArray([]))
+assert Json.parse("{}") == Ok(Json.JSONObject([]))
+
+// TODO Invalid inputs
+
+// TODO Various strings. Escapes, emojis etc.
+
+// TODO Different number types
+
+// TODO Big numbers
+
+
+
+// Emitting
+
+// TODO Simple values of each type
+
+// TODO Invalid numbers

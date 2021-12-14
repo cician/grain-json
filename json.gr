@@ -3,7 +3,6 @@ import Char from "char"
 import List from "list"
 import Option from "option"
 import Number from "number"
-import Exception from "runtime/exception"
 import WasmI32 from "runtime/unsafe/wasmi32"
 import WasmI64 from "runtime/unsafe/wasmi64"
 import WasmF32 from "runtime/unsafe/wasmf32"
@@ -14,6 +13,8 @@ import Numbers from "runtime/numbers"
 import Memory from "runtime/unsafe/memory"
 import StringReader from "./stringreader"
 import Buffer from "buffer"
+import { toString as runtimeToString } from "runtime/string"
+import { coerceNumberToWasmI32 } from "runtime/numbers"
 
 export enum JSON {
   JSONNull,
@@ -30,7 +31,9 @@ export enum JSON {
   JSONObject(List<(String,JSON)>)
 }
 
-export exception InvalidJSON(String)
+export enum JSONToStringError {
+  InvalidNumber(String)
+}
 
 export enum IndentationFormat {
   NoIndentation,
@@ -145,7 +148,7 @@ record JSONWriterPrettyImplHelper {
 // It may make sense in the future to expose it and let the user reuse a writer for multiple
 // JSON emit operations without reallocating new closures and buffers each time.
 record JSONWriter {
-  emit: JSON -> Option<Exception>,
+  emit: JSON -> Option<JSONToStringError>,
 }
 
 let addCharFromCodePoint = (codePoint: Number, buffer: Buffer.Buffer) => {
@@ -323,11 +326,11 @@ let isNaN = (value: WasmF64) => {
   WasmF64.ne(value, value)
 }
 
-let makeNaNException = () => Some(InvalidJSON("NaN is not allowed in JSONNumber"))
+let makeNaNError = () => Some(InvalidNumber("NaN is not allowed in JSONNumber"))
 
-let makeInfException = () => Some(InvalidJSON("Infinity is not allowed in JSONNumber"))
+let makeInfError = () => Some(InvalidNumber("Infinity is not allowed in JSONNumber"))
 
-let makeNegInfException = () => Some(InvalidJSON("-Infinity is not allowed in JSONNumber"))
+let makeNegInfError = () => Some(InvalidNumber("-Infinity is not allowed in JSONNumber"))
 
 @disableGC
 let printNumberWasmF64 = (value: WasmF64, buffer: Buffer.Buffer) => {
@@ -355,11 +358,14 @@ let printNumberWasmF64 = (value: WasmF64, buffer: Buffer.Buffer) => {
       if (isNaN(value)) {
         // Allocating the exception in a function without @disableGC makes
         // it easier to avoid problems with reference counting.
-        makeNaNException()
+        Memory.incRef(WasmI32.fromGrain(makeNaNError))
+        makeNaNError()
       } else if (WasmF64.lt(value, 0.0W)) {
-        makeNegInfException()
+        Memory.incRef(WasmI32.fromGrain(makeNegInfError))
+        makeNegInfError()
       } else {
-        makeInfException()
+        Memory.incRef(WasmI32.fromGrain(makeInfError))
+        makeInfError()
       }
     }
 
@@ -1094,9 +1100,10 @@ record JSONParserImplHelper {
   mut pos: Number
 }
 
-export exception UnexpectedEndOfInput
-
-export exception UnexpectedToken(Char, Number)
+export enum JSONParseError {
+  UnexpectedEndOfInput(String),
+  UnexpectedToken(String)
+}
 
 export let toStringPretty = (json: JSON) => toString(json, defaultPrettyFormat())
 
@@ -1132,14 +1139,43 @@ let skipWhiteSpace = (parserImplHelper: JSONParserImplHelper) => {
   }
 }
 
-let buildUnexpectedTokenError = (parserImplHelper: JSONParserImplHelper) => {
+let buildUnexpectedTokenError = (parserImplHelper: JSONParserImplHelper, detail: String) => {
   let codePoint = parserImplHelper.currentCodePoint
+  let pos = parserImplHelper.pos
   if (codePoint == _END_OF_INPUT) {
-    UnexpectedEndOfInput
+    UnexpectedEndOfInput("Unexpected token at position " ++ runtimeToString(pos) ++ ": " ++ detail)
   } else {
-    let char = Char.fromCode(parserImplHelper.currentCodePoint)
-    let pos = parserImplHelper.pos
-    UnexpectedToken(char, pos)
+    UnexpectedToken("Unexpected token at position " ++ runtimeToString(pos) ++ ": " ++ detail)
+  }
+}
+
+@disableGC
+let rec toHex = (n: Number) => {
+  let x = coerceNumberToWasmI32(n)
+  let result = NumberUtils.itoa32(x, 16n)
+
+  Memory.decRef(WasmI32.fromGrain(n))
+  Memory.decRef(WasmI32.fromGrain(toHex))
+
+  result
+}
+
+let formatCodePointOrEOF = (codePoint: Number) => {
+  if (codePoint >= 32 && codePoint <= 126) {
+    // If the codepoint is in the range of printable ASCII charactes, then
+    // display the character itself . Whether it's a good idea to display
+    // all of them, especially space is up for debate.
+    "'" ++ runtimeToString(Char.fromCode(codePoint)) ++ "'"
+  } else if (codePoint == -1) {
+    // Special case for value used by the parsing code to avoid heap allocations.
+    "end of input"
+  } else {
+    // Format any other code point as hexadecimal value.
+    let mut asHex = toHex(codePoint)
+    while (String.length(asHex) < 4) {
+      asHex = "0" ++ asHex
+    }
+    "U+" ++ asHex
   }
 }
 
@@ -1149,14 +1185,15 @@ let expectCodePointAndAdvance = (expectedCodePoint: Number, parserImplHelper: JS
     next(parserImplHelper)
     None
   } else {
-    Some(buildUnexpectedTokenError(parserImplHelper))
+    let detail = "expected " ++ formatCodePointOrEOF(expectedCodePoint) ++ ", found " ++ formatCodePointOrEOF(c)
+    Some(buildUnexpectedTokenError(parserImplHelper, detail))
   }
 }
 
 let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
   skipWhiteSpace(parserImplHelper)
 
-    let result = match (parserImplHelper.currentCodePoint) {
+  let result = match (parserImplHelper.currentCodePoint) {
     0x7B => parseObject(parserImplHelper), // '{'
     0x5B => parseArray(parserImplHelper), // '['
     0x22 => parseStringValue(parserImplHelper), // '"'
@@ -1166,7 +1203,8 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
     // TODO Check if having a match case for each digit would be faster or not.
     c when (c >= 0x30 && c <= 0x39) || c == 0x2D => parseNumberValue(parserImplHelper), // '0'..'9' or '-'
     c => {
-      Err(buildUnexpectedTokenError(parserImplHelper))
+      let detail = "expected start of a JSON value, found " ++ formatCodePointOrEOF(c)
+      Err(buildUnexpectedTokenError(parserImplHelper, detail))
     }
   }
 
@@ -1357,7 +1395,9 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
                   } else if (hexDigitCodePoint >= 97 && hexDigitCodePoint <= 102) { // a..f
                     digit -= 87 // (97 - 10)
                   } else {
-                    err = Some(buildUnexpectedTokenError(parserImplHelper))
+                    let digitsSoFar = 3-digitIndex
+                    let detail = "expected exactly 4 hexadecimal digits in the UTF-16 escape sequence, found only " ++ runtimeToString(digitsSoFar)
+                    err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
                     break
                   }
                   
@@ -1407,10 +1447,11 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
                   }
                 }
               },
-              _ => {
+              unexpectedCodePoint => {
                 // JSON doesn't allow arbitrary characters to be preceded by backslash escape.
                 // Only the ones above.
-                err = Some(buildUnexpectedTokenError(parserImplHelper))
+                let detail = "expected a valid escape sequence or the end of string, found " ++ formatCodePointOrEOF(unexpectedCodePoint)
+                err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
                 break
               }
             }
@@ -1433,7 +1474,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
             let s = Buffer.toString(buffer)
             Ok(s)
           } else {
-            Err(buildUnexpectedTokenError(parserImplHelper))
+            Err(buildUnexpectedTokenError(parserImplHelper, "unexpected end of string value"))
           }
         },
         Some(e) => Err(e)
@@ -1502,10 +1543,11 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 
       void
     },
-    _ => {
+    unexpectedCodePoint => {
       // The integer part of the number has to have at least one digit.
       // JSON doesn't allow numbers starting with decimal separator like ".1".
-      err = Some(buildUnexpectedTokenError(parserImplHelper))
+      let detail = "expected a decimal digit, found " ++ formatCodePointOrEOF(unexpectedCodePoint)
+      err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
     }
   }
 
@@ -1651,7 +1693,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
           if (done) {
             Ok(JSONArray(List.reverse(elems)))
           } else {
-            Err(buildUnexpectedTokenError(parserImplHelper))
+            Err(buildUnexpectedTokenError(parserImplHelper, "unexpected end of array"))
           }
         }
       }
@@ -1676,12 +1718,14 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
         let c = parserImplHelper.currentCodePoint
         match (c) {
           -1 => {
-            err = Some(UnexpectedEndOfInput)
+            let detail = "expected a key-value pair or the end of the object"
+            err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
             break
           },
           0x2C => { // ','
             if (first) {
-              err = Some(buildUnexpectedTokenError(parserImplHelper))
+              let detail = "expected a key-value pair or the end of the object, found ','"
+              err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
               break
             } else {
               next(parserImplHelper)
@@ -1738,7 +1782,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
           } else {
             // This brand is not expected to actually execute, 
             // but in case it does, may just as well do the right thing.
-            Err(buildUnexpectedTokenError(parserImplHelper))
+            Err(buildUnexpectedTokenError(parserImplHelper, "unexpected end of object"))
           }
         }
       }
@@ -1746,7 +1790,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
   }
 }
 
-export let parse : String -> Result<JSON,Exception> = (str: String) => {
+export let parse : String -> Result<JSON,JSONParseError> = (str: String) => {
   let reader = StringReader.make(str)
 
   let parserImplHelper = {
@@ -1763,7 +1807,10 @@ export let parse : String -> Result<JSON,Exception> = (str: String) => {
     root
   } else {
     match (root) {
-      Ok(_) => Err(buildUnexpectedTokenError(parserImplHelper)),
+      Ok(_) => {
+        let detail = "expected end of input, found " ++ formatCodePointOrEOF(parserImplHelper.currentCodePoint)
+        Err(buildUnexpectedTokenError(parserImplHelper, detail))
+      },
       e => e
     }
   }
