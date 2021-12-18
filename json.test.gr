@@ -23,6 +23,16 @@ assert parse("\"🤘🏻\"") == Ok(JSONString("🤘🏻"))
 assert parse("\"🏴󠁧󠁢󠁷󠁬󠁳󠁿\"") ==
 Ok(JSONString("🏴󠁧󠁢󠁷󠁬󠁳󠁿"))
 
+assert parse(
+  "\"\u005Cu6000 \u005Cud800\u005Cudc82 \u005Cud83e\u005Cudd18\u005Cud83c\u005Cudffb \u005Cud83c\u005Cudff4\u005Cudb40\u005Cudc67\u005Cudb40\u005Cudc62\u005Cudb40\u005Cudc77\u005Cudb40\u005Cudc6c\u005Cudb40\u005Cudc73\u005Cudb40\u005Cudc7f\"",
+) ==
+Ok(JSONString("怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿"))
+
+assert parse(
+  "\"\u005Cu6000 \u005Cud800\u005Cudc82 \u005Cud83e\u005Cudd18\u005Cud83c\u005Cudffb \u005Cud83c\u005Cudff4\u005Cudb40\u005Cudc67\u005Cudb40\u005Cudc62\u005Cudb40\u005Cudc77\u005Cudb40\u005Cudc6c\u005Cudb40\u005Cudc73\u005Cudb40\u005Cudc7f\"",
+) ==
+parse("\"怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿\"")
+
 // Different number types and values
 assert parse("-10") == Ok(JSONNumber(-10))
 assert parse("-2") == Ok(JSONNumber(-2))
@@ -257,8 +267,71 @@ assert match (parse("{\"k\":\"v\"")) {
 
 // Emitting
 
-// TODO Simple values of each type
+// Simple values of each type
+assert toStringCompact(JSONNull) == Ok("null")
+assert toStringCompact(JSONBoolean(true)) == Ok("true")
+assert toStringCompact(JSONBoolean(false)) == Ok("false")
+assert toStringCompact(JSONString("")) == Ok("\"\"")
+assert toStringCompact(JSONNumber(0)) == Ok("0")
+assert toStringCompact(JSONArray([])) == Ok("[]")
+assert toStringCompact(JSONObject([])) == Ok("{}")
 
-// TODO Invalid numbers
+// Note that number tests are sensitive both to compiler's interpretation of
+// the constants as different number tags (simple numbers, float32, float64)
+// and internal details of JSON formatting. We definetely want them to fail
+// when the latter changes. The former shouldn't be an issue assuming here
+// constants with decimal point or exponentials are float64.
+assert toStringCompact(JSONNumber(-10)) == Ok("-10")
+assert toStringCompact(JSONNumber(-2)) == Ok("-2")
+assert toStringCompact(JSONNumber(-1)) == Ok("-1")
+assert toStringCompact(JSONNumber(1)) == Ok("1")
+assert toStringCompact(JSONNumber(2)) == Ok("2")
+assert toStringCompact(JSONNumber(10)) == Ok("10")
+assert toStringCompact(JSONNumber(100)) == Ok("100")
+assert toStringCompact(JSONNumber(1000)) == Ok("1000")
+assert toStringCompact(JSONNumber(0.0)) == Ok("0.0")
+assert toStringCompact(JSONNumber(0.1)) == Ok("0.1")
+assert toStringCompact(JSONNumber(0.123)) == Ok("0.123")
+assert toStringCompact(JSONNumber(0.9)) == Ok("0.9")
+assert toStringCompact(JSONNumber(1.123)) == Ok("1.123")
+assert toStringCompact(JSONNumber(0e0)) == Ok("0.0")
+assert toStringCompact(JSONNumber(1e0)) == Ok("1.0")
+assert toStringCompact(JSONNumber(1e1)) == Ok("10.0")
+assert toStringCompact(JSONNumber(1E1)) == Ok("10.0")
+assert toStringCompact(JSONNumber(1e2)) == Ok("100.0")
+assert toStringCompact(JSONNumber(1e3)) == Ok("1000.0")
+assert toStringCompact(JSONNumber(-1e2)) == Ok("-100.0")
+assert toStringCompact(JSONNumber(1e-1)) == Ok("0.1")
+assert toStringCompact(JSONNumber(1.23e-4)) == Ok("0.000123")
+
+// FIXME semantics for negative zero still not defined
+
+// Big numbers
+assert toStringCompact(JSONNumber(1152921504606846976)) == Ok("1152921504606846976")
+assert toStringCompact(JSONNumber(1152921504606847000.0)) == Ok("1152921504606847000.0")
+
+// Invalid numbers
+
+// There's currently a github issue for NaN and infinity syntax: https://github.com/grain-lang/grain/issues/693
+let nan = 0.0 / 0.0
+let infinity = 1.0 / 0.0
+let negativeinfinity = -1.0 / 0.0
+
+assert match (toStringCompact(JSONNumber(nan))) {
+  Err(InvalidNumber(_)) => true,
+  _ => false,
+}
+
+assert match (toStringCompact(JSONNumber(infinity))) {
+  Err(InvalidNumber(_)) => true,
+  _ => false,
+}
+
+assert match (toStringCompact(JSONNumber(negativeinfinity))) {
+  Err(InvalidNumber(_)) => true,
+  _ => false,
+}
 
 // TODO round trips
+
+// TODO pretty printing
