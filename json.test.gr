@@ -1,57 +1,55 @@
-import Json from "./json"
-import Result from "result"
+import * from "./json"
 
 // Parsing
 
 // Simple values of each type
-assert Json.parse("null") == Ok(Json.JSONNull)
-assert Json.parse("true") == Ok(Json.JSONBoolean(true))
-assert Json.parse("false") == Ok(Json.JSONBoolean(false))
-assert Json.parse("\"\"") == Ok(Json.JSONString(""))
-assert Json.parse("0") == Ok(Json.JSONNumber(0))
-assert Json.parse("[]") == Ok(Json.JSONArray([]))
-assert Json.parse("{}") == Ok(Json.JSONObject([]))
+assert parse("null") == Ok(JSONNull)
+assert parse("true") == Ok(JSONBoolean(true))
+assert parse("false") == Ok(JSONBoolean(false))
+assert parse("\"\"") == Ok(JSONString(""))
+assert parse("0") == Ok(JSONNumber(0))
+assert parse("[]") == Ok(JSONArray([]))
+assert parse("{}") == Ok(JSONObject([]))
 
 // Various strings. Escapes, emojis etc.
-assert Json.parse("\"ASCII Hello world!\"") ==
-Ok(Json.JSONString("ASCII Hello world!"))
+assert parse("\"ASCII Hello world!\"") == Ok(JSONString("ASCII Hello world!"))
 
-assert Json.parse("\"Unicode こんにちは世界!\"") ==
-Ok(Json.JSONString("Unicode こんにちは世界!"))
-assert Json.parse("\"A \\\"quoted\\\" string\"") ==
-Ok(Json.JSONString("A \"quoted\" string"))
-assert Json.parse("\"🤘🏻\"") == Ok(Json.JSONString("🤘🏻"))
-assert Json.parse("\"🤘🏻\"") == Ok(Json.JSONString("🤘🏻"))
-assert Json.parse("\"🏴󠁧󠁢󠁷󠁬󠁳󠁿\"") ==
-Ok(Json.JSONString("🏴󠁧󠁢󠁷󠁬󠁳󠁿"))
+assert parse("\"Unicode こんにちは世界!\"") ==
+Ok(JSONString("Unicode こんにちは世界!"))
+assert parse("\"A \\\"quoted\\\" string\"") ==
+Ok(JSONString("A \"quoted\" string"))
+assert parse("\"🤘🏻\"") == Ok(JSONString("🤘🏻"))
+assert parse("\"🤘🏻\"") == Ok(JSONString("🤘🏻"))
+assert parse("\"🏴󠁧󠁢󠁷󠁬󠁳󠁿\"") ==
+Ok(JSONString("🏴󠁧󠁢󠁷󠁬󠁳󠁿"))
 
 // Different number types and values
-assert Json.parse("-10") == Ok(Json.JSONNumber(-10))
-assert Json.parse("-2") == Ok(Json.JSONNumber(-2))
-assert Json.parse("-1") == Ok(Json.JSONNumber(-1))
-assert Json.parse("1") == Ok(Json.JSONNumber(1))
-assert Json.parse("2") == Ok(Json.JSONNumber(2))
-assert Json.parse("10") == Ok(Json.JSONNumber(10))
-assert Json.parse("100") == Ok(Json.JSONNumber(100))
-assert Json.parse("1000") == Ok(Json.JSONNumber(1000))
-assert Json.parse("0.0") == Ok(Json.JSONNumber(0.0))
-assert Json.parse("0.1") == Ok(Json.JSONNumber(0.1))
-assert Json.parse("0.123") == Ok(Json.JSONNumber(0.123))
-assert Json.parse("0.9") == Ok(Json.JSONNumber(0.9))
-assert Json.parse("1.123") == Ok(Json.JSONNumber(1.123))
-assert Json.parse("0e0") == Ok(Json.JSONNumber(0.0))
-assert Json.parse("1e0") == Ok(Json.JSONNumber(1.0))
-assert Json.parse("1e1") == Ok(Json.JSONNumber(10.0))
-assert Json.parse("1E1") == Ok(Json.JSONNumber(10.0))
-assert Json.parse("1e2") == Ok(Json.JSONNumber(100.0))
-assert Json.parse("1e3") == Ok(Json.JSONNumber(1000.0))
-assert Json.parse("-1e2") == Ok(Json.JSONNumber(-100.0))
-assert Json.parse("1e-1") == Ok(Json.JSONNumber(0.1))
-assert Json.parse("1.23e-4") == Ok(Json.JSONNumber(0.000123))
+assert parse("-10") == Ok(JSONNumber(-10))
+assert parse("-2") == Ok(JSONNumber(-2))
+assert parse("-1") == Ok(JSONNumber(-1))
+assert parse("1") == Ok(JSONNumber(1))
+assert parse("2") == Ok(JSONNumber(2))
+assert parse("10") == Ok(JSONNumber(10))
+assert parse("100") == Ok(JSONNumber(100))
+assert parse("1000") == Ok(JSONNumber(1000))
+assert parse("0.0") == Ok(JSONNumber(0.0))
+assert parse("0.1") == Ok(JSONNumber(0.1))
+assert parse("0.123") == Ok(JSONNumber(0.123))
+assert parse("0.9") == Ok(JSONNumber(0.9))
+assert parse("1.123") == Ok(JSONNumber(1.123))
+assert parse("0e0") == Ok(JSONNumber(0.0))
+assert parse("1e0") == Ok(JSONNumber(1.0))
+assert parse("1e1") == Ok(JSONNumber(10.0))
+assert parse("1E1") == Ok(JSONNumber(10.0))
+assert parse("1e2") == Ok(JSONNumber(100.0))
+assert parse("1e3") == Ok(JSONNumber(1000.0))
+assert parse("-1e2") == Ok(JSONNumber(-100.0))
+assert parse("1e-1") == Ok(JSONNumber(0.1))
+assert parse("1.23e-4") == Ok(JSONNumber(0.000123))
 
-// FIXME 
+// FIXME
 // "-0" currently parses to 0, but should it?
-// assert Json.parse("-0") == Ok(Json.JSONNumber(?))
+// assert parse("-0") == Ok(JSONNumber(?))
 // Note that in Grain these are true:
 // assert 0 == 0
 // assert 0.0 == -0.0
@@ -59,65 +57,201 @@ assert Json.parse("1.23e-4") == Ok(Json.JSONNumber(0.000123))
 // And printing constant "-0" results in "0"
 
 // Big numbers
-assert Json.parse("1152921504606846976") ==
-Ok(Json.JSONNumber(1152921504606846976))
+assert parse("1152921504606846976") == Ok(JSONNumber(1152921504606846976))
 
 // TODO Bigger numbers.
 // Numbers with large exponents not yet handled in parsing. Waiting for arbitrary precision number support in Grain.
-//assert Json.parse("1E200") == Ok(Json.JSONNumber(1E200))
-//assert Json.parse("1E-200") == Ok(Json.JSONNumber(1E-200))
+//assert parse("1E200") == Ok(JSONNumber(1E200))
+//assert parse("1E-200") == Ok(JSONNumber(1E-200))
 
 // Complex objects and arrays.
 
-assert Json.parse("{ \"Hello\" : \"World!\" }") ==
-Ok(Json.JSONObject([("Hello", Json.JSONString("World!"))]))
+assert parse("{ \"Hello\" : \"World!\" }") ==
+Ok(JSONObject([("Hello", JSONString("World!"))]))
 
-assert Json.parse("{\"a\":\"A\",\"b\":\"B\"}") ==
-Ok(Json.JSONObject([("a", Json.JSONString("A")), ("b", Json.JSONString("B"))]))
+assert parse("{\"a\":\"A\",\"b\":\"B\"}") ==
+Ok(JSONObject([("a", JSONString("A")), ("b", JSONString("B"))]))
 
-assert Json.parse(
+assert parse(
   "{ \"a\" : { \"0\": false, \"1\":true }, \"b\" : [\"A\",\"B\",\"C\"] }",
 ) ==
 Ok(
-  Json.JSONObject(
+  JSONObject(
     [
-      ("a", Json.JSONObject(
-        [("0", Json.JSONBoolean(false)), ("1", Json.JSONBoolean(true))],
-      )),
-      ("b", Json.JSONArray(
-        [Json.JSONString("A"), Json.JSONString("B"), Json.JSONString("C")],
+      ("a", JSONObject([("0", JSONBoolean(false)), ("1", JSONBoolean(true))])),
+      ("b", JSONArray([JSONString("A"), JSONString("B"), JSONString("C")])),
+    ],
+  ),
+)
+
+assert parse("[1,\"2\",true,false,null]") ==
+Ok(
+  JSONArray(
+    [
+      JSONNumber(1),
+      JSONString("2"),
+      JSONBoolean(true),
+      JSONBoolean(false),
+      JSONNull,
+    ],
+  ),
+)
+
+assert parse("[[[[[[[[[[]]]]]]]]]]") ==
+Ok(
+  JSONArray(
+    [
+      JSONArray(
+        [
+          JSONArray(
+            [
+              JSONArray(
+                [
+                  JSONArray(
+                    [
+                      JSONArray(
+                        [JSONArray([JSONArray([JSONArray([JSONArray([])])])])],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  ),
+)
+
+assert parse(
+  "{\"1\":{\"2\":{\"3\":{\"4\":{\"5\":{\"6\":{\"7\":{\"8\":{\"9\":{\"10\":{}}}}}}}}}}}",
+) ==
+Ok(
+  JSONObject(
+    [
+      ("1", JSONObject(
+        [
+          ("2", JSONObject(
+            [
+              ("3", JSONObject(
+                [
+                  ("4", JSONObject(
+                    [
+                      ("5", JSONObject(
+                        [
+                          ("6", JSONObject(
+                            [
+                              ("7", JSONObject(
+                                [
+                                  ("8", JSONObject(
+                                    [
+                                      ("9", JSONObject(
+                                        [("10", JSONObject([]))],
+                                      )),
+                                    ],
+                                  )),
+                                ],
+                              )),
+                            ],
+                          )),
+                        ],
+                      )),
+                    ],
+                  )),
+                ],
+              )),
+            ],
+          )),
+        ],
       )),
     ],
   ),
 )
 
-assert Json.parse("[1,2,3]") ==
-Ok(Json.JSONArray([Json.JSONNumber(1), Json.JSONNumber(2), Json.JSONNumber(3)]))
-assert Json.parse("[\"a\",\"b\",\"c\"]") ==
-Ok(
-  Json.JSONArray(
-    [Json.JSONString("a"), Json.JSONString("b"), Json.JSONString("c")],
-  ),
-)
+assert parse("[1,2,3]") ==
+Ok(JSONArray([JSONNumber(1), JSONNumber(2), JSONNumber(3)]))
+assert parse("[\"a\",\"b\",\"c\"]") ==
+Ok(JSONArray([JSONString("a"), JSONString("b"), JSONString("c")]))
 
 // White spaces
-assert Json.parse("\tnull \r\n") == Ok(Json.JSONNull)
-assert Json.parse("  {\r}") == Ok(Json.JSONObject([]))
-assert Json.parse("[1,\n2\n,3\n]\n") ==
-Ok(Json.JSONArray([Json.JSONNumber(1), Json.JSONNumber(2), Json.JSONNumber(3)]))
-assert Json.parse("{ \"a\" :  \"A\" ,  \"b\" : \"B\" }") ==
-Ok(Json.JSONObject([("a", Json.JSONString("A")), ("b", Json.JSONString("B"))]))
+assert parse("\tnull \r\n") == Ok(JSONNull)
+assert parse("  {\r}") == Ok(JSONObject([]))
+assert parse("[1,\n2\n,3\n]\n") ==
+Ok(JSONArray([JSONNumber(1), JSONNumber(2), JSONNumber(3)]))
+assert parse("{ \"a\" :  \"A\" ,  \"b\" : \"B\" }") ==
+Ok(JSONObject([("a", JSONString("A")), ("b", JSONString("B"))]))
 
 // Invalid inputs
 
 // JSON numbers should start with a non zero digit or minus sign.
-assert match (Json.parse("01")) {
-  Err(Json.UnexpectedToken(_)) => true,
+assert match (parse("01")) {
+  Err(UnexpectedToken(_)) => true,
   _ => false,
 }
 
-assert match (Json.parse(".1")) {
-  Err(Json.UnexpectedToken(_)) => true,
+assert match (parse(".1")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{}error")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+assert match (parse("[]error")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+assert match (parse("]")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+assert match (parse("}")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{")) {
+  Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+assert match (parse("\"k\":\"v\"")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+assert match (parse("[")) {
+  Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{\"k")) {
+  Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{\"k\"")) {
+  Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{\"k\":")) {
+  Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{\"k\":\"v")) {
+  Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+assert match (parse("{\"k\":\"v\"")) {
+  Err(UnexpectedEndOfInput(_)) => true,
   _ => false,
 }
 
