@@ -276,6 +276,23 @@ assert toStringCompact(JSONNumber(0)) == Ok("0")
 assert toStringCompact(JSONArray([])) == Ok("[]")
 assert toStringCompact(JSONObject([])) == Ok("{}")
 
+// Various strings. Escapes, emojis etc.
+assert toStringCompact(JSONString("ASCII Hello world!")) ==
+Ok("\"ASCII Hello world!\"")
+
+assert toStringCompact(JSONString("Unicode こんにちは世界!")) ==
+Ok("\"Unicode こんにちは世界!\"")
+assert toStringCompact(JSONString("A \"quoted\" string")) ==
+Ok("\"A \\\"quoted\\\" string\"")
+assert toStringCompact(JSONString("🤘🏻")) == Ok("\"🤘🏻\"")
+assert toStringCompact(JSONString("🤘🏻")) == Ok("\"🤘🏻\"")
+assert toStringCompact(JSONString("🏴󠁧󠁢󠁷󠁬󠁳󠁿")) ==
+Ok("\"🏴󠁧󠁢󠁷󠁬󠁳󠁿\"")
+assert toStringCompact(
+  JSONString("怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿"),
+) ==
+Ok("\"怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿\"")
+
 // Note that number tests are sensitive both to compiler's interpretation of
 // the constants as different number tags (simple numbers, float32, float64)
 // and internal details of JSON formatting. We definetely want them to fail
@@ -307,8 +324,10 @@ assert toStringCompact(JSONNumber(1.23e-4)) == Ok("0.000123")
 // FIXME semantics for negative zero still not defined
 
 // Big numbers
-assert toStringCompact(JSONNumber(1152921504606846976)) == Ok("1152921504606846976")
-assert toStringCompact(JSONNumber(1152921504606847000.0)) == Ok("1152921504606847000.0")
+assert toStringCompact(JSONNumber(1152921504606846976)) ==
+Ok("1152921504606846976")
+assert toStringCompact(JSONNumber(1152921504606847000.0)) ==
+Ok("1152921504606847000.0")
 
 // Invalid numbers
 
