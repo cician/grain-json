@@ -20,20 +20,15 @@ assert parse("\"Unicode こんにちは世界!\"") ==
 Ok(JSONString("Unicode こんにちは世界!"))
 assert parse("\"A \\\"quoted\\\" string\"") ==
 Ok(JSONString("A \"quoted\" string"))
+assert parse("\"\\uD801\\uDC37\"") == Ok(JSONString("𐐷"))
 assert parse("\"🤘🏻\"") == Ok(JSONString("🤘🏻"))
 assert parse("\"🤘🏻\"") == Ok(JSONString("🤘🏻"))
 assert parse("\"🏴󠁧󠁢󠁷󠁬󠁳󠁿\"") ==
 Ok(JSONString("🏴󠁧󠁢󠁷󠁬󠁳󠁿"))
-
 assert parse(
-  "\"\u005Cu6000 \u005Cud800\u005Cudc82 \u005Cud83e\u005Cudd18\u005Cud83c\u005Cudffb \u005Cud83c\u005Cudff4\u005Cudb40\u005Cudc67\u005Cudb40\u005Cudc62\u005Cudb40\u005Cudc77\u005Cudb40\u005Cudc6c\u005Cudb40\u005Cudc73\u005Cudb40\u005Cudc7f\"",
+  "\"\\u6000 \\ud800\\udc82 \\ud83e\\udd18\\ud83c\\udffb \\ud83c\\udff4\\udb40\\udc67\\udb40\\udc62\\udb40\\udc77\\udb40\\udc6c\\udb40\\udc73\\udb40\\udc7f\"",
 ) ==
 Ok(JSONString("怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿"))
-
-assert parse(
-  "\"\u005Cu6000 \u005Cud800\u005Cudc82 \u005Cud83e\u005Cudd18\u005Cud83c\u005Cudffb \u005Cud83c\u005Cudff4\u005Cudb40\u005Cudc67\u005Cudb40\u005Cudc62\u005Cudb40\u005Cudc77\u005Cudb40\u005Cudc6c\u005Cudb40\u005Cudc73\u005Cudb40\u005Cudc7f\"",
-) ==
-parse("\"怀 𐂂 🤘🏻 🏴󠁧󠁢󠁷󠁬󠁳󠁿\"")
 
 // Different number types and values
 assert parse("-10") == Ok(JSONNumber(-10))
@@ -264,6 +259,44 @@ assert match (parse("{\"k\":\"v")) {
 
 assert match (parse("{\"k\":\"v\"")) {
   Err(UnexpectedEndOfInput(_)) => true,
+  _ => false,
+}
+
+// UTF-16 surrogate pairs should be the high half followed by the low half.
+
+// Two high surrogates.
+assert match (parse("\"\\uD801\\uD801\"")) {
+  Err(InvalidUTF16SurrogatePair(_)) => true,
+  _ => false,
+}
+
+// Inverted low and high surrogate order.
+assert match (parse("\"\\uDC37\\uD801\"")) {
+  Err(InvalidUTF16SurrogatePair(_)) => true,
+  _ => false,
+}
+
+// Single low surrogate
+assert match (parse("\"\\uDC37\"")) {
+  Err(InvalidUTF16SurrogatePair(_)) => true,
+  _ => false,
+}
+
+// Single high surrogate
+assert match (parse("\"\\uD801\"")) {
+  Err(UnexpectedToken(_)) => true,
+  _ => false,
+}
+
+// High surrogate + non surrogate code point
+assert match (parse("\"\\uD801\\u0524\"")) {
+  Err(InvalidUTF16SurrogatePair(_)) => true,
+  _ => false,
+}
+
+// Low surrogate + non surrogate code point
+assert match (parse("\"\\uDC37\\u0524\"")) {
+  Err(InvalidUTF16SurrogatePair(_)) => true,
   _ => false,
 }
 
