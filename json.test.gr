@@ -1,4 +1,6 @@
 import * from "./json"
+import Result from "result"
+import List from "list"
 
 // Parsing
 
@@ -351,6 +353,140 @@ assert match (toStringCompact(JSONNumber(negativeinfinity))) {
   _ => false,
 }
 
-// TODO round trips
+// Pretty printing
 
-// TODO pretty printing
+let simplePrimitives = [
+  JSONNull,
+  JSONBoolean(true),
+  JSONBoolean(false),
+  JSONNumber(2),
+  JSONString("abc"),
+]
+
+let comprehensiveNestingCombinations = [
+  JSONArray([]),
+  JSONArray([JSONNumber(1)]),
+  JSONArray([JSONNumber(1), JSONNumber(2)]),
+  JSONArray([JSONNumber(1), JSONNumber(2), JSONNumber(3)]),
+  JSONArray(
+    [
+      JSONArray([]),
+      JSONArray([JSONNumber(1)]),
+      JSONArray([JSONNumber(1), JSONNumber(2)]),
+      JSONArray([JSONNumber(1), JSONNumber(2), JSONNumber(3)]),
+    ],
+  ),
+  JSONArray([JSONArray([JSONArray([])])]),
+  JSONObject([]),
+  JSONObject([("a", JSONString("A"))]),
+  JSONObject([("a", JSONString("A")), ("b", JSONString("B"))]),
+  JSONObject(
+    [("a", JSONString("A")), ("b", JSONString("B")), ("c", JSONString("C"))],
+  ),
+  JSONObject([("a", JSONObject([("b", JSONObject([("c", JSONObject([]))]))]))]),
+  JSONObject(
+    [
+      ("arrays", JSONArray(
+        [
+          JSONArray([]),
+          JSONArray([JSONNumber(1)]),
+          JSONArray([JSONNumber(1), JSONNumber(2)]),
+          JSONArray([JSONNumber(1), JSONNumber(2), JSONNumber(3)]),
+        ],
+      )),
+      ("objects", JSONObject(
+        [
+          ("a", JSONString("A")),
+          ("b", JSONString("B")),
+          ("c", JSONString("C")),
+        ],
+      )),
+    ],
+  ),
+]
+
+let comprehensiveJSONObject = JSONObject(
+  [
+    ("primitives", JSONArray(simplePrimitives)),
+    ("nesting", JSONArray(comprehensiveNestingCombinations)),
+  ],
+)
+
+// Indentation and line breaks
+
+assert List.map(
+  json =>
+    toString(
+      json,
+      {
+        indentation: IndentWithSpaces(2),
+        arrayFormat: CompactArrayEntries,
+        objectFormat: CompactObjectEntries,
+        lineEnding: LineFeed,
+        finishWithNewLine: false,
+        escapeAllControlPoints: false,
+        escapeHTMLUnsafeSequences: false,
+        escapeNonASCII: false,
+      },
+    ),
+  comprehensiveNestingCombinations,
+) ==
+[
+  Ok("[]"),
+  Ok("[1]"),
+  Ok("[1,2]"),
+  Ok("[1,2,3]"),
+  Ok("[[],[1],[1,2],[1,2,3]]"),
+  Ok("[[[]]]"),
+  Ok("{}"),
+  Ok("{\"a\":\"A\"}"),
+  Ok("{\"a\":\"A\",\"b\":\"B\"}"),
+  Ok("{\"a\":\"A\",\"b\":\"B\",\"c\":\"C\"}"),
+  Ok("{\"a\":{\"b\":{\"c\":{}}}}"),
+  Ok(
+    "{\"arrays\":[[],[1],[1,2],[1,2,3]],\"objects\":{\"a\":\"A\",\"b\":\"B\",\"c\":\"C\"}}",
+  ),
+]
+
+assert List.map(
+  json =>
+    toString(
+      json,
+      {
+        indentation: IndentWithSpaces(2),
+        arrayFormat: OneArrayEntryPerLine,
+        objectFormat: OneObjectEntryPerLine,
+        lineEnding: LineFeed,
+        finishWithNewLine: false,
+        escapeAllControlPoints: false,
+        escapeHTMLUnsafeSequences: false,
+        escapeNonASCII: false,
+      },
+    ),
+  comprehensiveNestingCombinations,
+) ==
+[
+  Ok("[]"),
+  Ok("[\n  1\n]"),
+  Ok("[\n  1,\n  2\n]"),
+  Ok("[\n  1,\n  2,\n  3\n]"),
+  Ok(
+    "[\n  [],\n  [\n    1\n  ],\n  [\n    1,\n    2\n  ],\n  [\n    1,\n    2,\n    3\n  ]\n]",
+  ),
+  Ok("[\n  [\n    []\n  ]\n]"),
+  Ok("{}"),
+  Ok("{\n  \"a\": \"A\"\n}"),
+  Ok("{\n  \"a\": \"A\",\n  \"b\": \"B\"\n}"),
+  Ok("{\n  \"a\": \"A\",\n  \"b\": \"B\",\n  \"c\": \"C\"\n}"),
+  Ok("{\n  \"a\": {\n    \"b\": {\n      \"c\": {}\n    }\n  }\n}"),
+  Ok(
+    "{\n  \"arrays\": [\n    [],\n    [\n      1\n    ],\n    [\n      1,\n      2\n    ],\n    [\n      1,\n      2,\n      3\n    ]\n  ],\n  \"objects\": {\n    \"a\": \"A\",\n    \"b\": \"B\",\n    \"c\": \"C\"\n  }\n}",
+  ),
+]
+
+// Round trips
+assert Result.map(parse, toStringCompact(comprehensiveJSONObject)) ==
+Ok(Ok(comprehensiveJSONObject))
+
+assert Result.map(parse, toStringPretty(comprehensiveJSONObject)) ==
+Ok(Ok(comprehensiveJSONObject))
