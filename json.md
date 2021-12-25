@@ -493,7 +493,7 @@ Parses JSON input from a string into a `JSON` object.
 
 Example output:
 ```
-Ok(JSONObject([("currency", JSONString("€")), ("price", JSONNumber(999/10))]))
+Ok(JSONObject([("currency", JSONString("$")), ("price", JSONNumber(119))]))
 ```
 
 Parameters:
@@ -511,6 +511,6 @@ Returns:
 Examples:
 
 ```grain
-print(parse("{\"currency\":\"€\",\"price\":99.9}"))
+print(parse("{\"currency\":\"$\",\"price\":119}"))
 ```
 
