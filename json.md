@@ -55,8 +55,8 @@ enum JSONToStringError {
 ```
 
 Represents errors for cases when a `JSON` object cannot be represente in the
-JSON format. This can happen when it contains number values `NaN`,
-`Infinity` or `-Infinity`.
+JSON format along with a human readable text message. This can happen when
+it contains number values `NaN`, `Infinity` or `-Infinity`.
 
 ### Json.**IndentationFormat**
 
@@ -468,6 +468,8 @@ enum JSONParseError {
 }
 ```
 
+Represents errors for JSON parsing along with a human readable text message.
+
 ### Json.**JSONParserImplHelper**
 
 ```grain
@@ -482,5 +484,33 @@ record JSONParserImplHelper {
 
 ```grain
 parse : String -> Result<JSON, JSONParseError>
+```
+
+Parses JSON input from a string into a `JSON` object.
+
+
+
+
+Example output:
+```
+Ok(JSONObject([("currency", JSONString("€")), ("price", JSONNumber(999/10))]))
+```
+
+Parameters:
+
+|param|type|description|
+|-----|----|-----------|
+|`str`|`String`|The JSON text string|
+
+Returns:
+
+|type|description|
+|----|-----------|
+|`Result<JSON, JSONParseError>`|A `Result` object with either the parsed `JSON` object or an error.|
+
+Examples:
+
+```grain
+print(parse("{\"currency\":\"€\",\"price\":99.9}"))
 ```
 

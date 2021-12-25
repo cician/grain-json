@@ -67,8 +67,8 @@ export enum JSON {
 
 /**
  * Represents errors for cases when a `JSON` object cannot be represente in the
- * JSON format. This can happen when it contains number values `NaN`,
- * `Infinity` or `-Infinity`.
+ * JSON format along with a human readable text message. This can happen when
+ * it contains number values `NaN`, `Infinity` or `-Infinity`.
  */
 export enum JSONToStringError {
   InvalidNumber(String)
@@ -1361,6 +1361,9 @@ export let toStringCompact = (json: JSON) => {
  */
 export let toStringPretty = (json: JSON) => toString(json, defaultPrettyFormat())
 
+/**
+ * Represents errors for JSON parsing along with a human readable text message.
+ */
 export enum JSONParseError {
   UnexpectedEndOfInput(String),
   UnexpectedToken(String),
@@ -2052,6 +2055,19 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
   }
 }
 
+/**
+ * Parses JSON input from a string into a `JSON` object.
+ * 
+ * @param str: The JSON text string
+ * @returns A `Result` object with either the parsed `JSON` object or an error.
+ *
+ * Example output:
+ * ```
+ * Ok(JSONObject([("currency", JSONString("€")), ("price", JSONNumber(999/10))]))
+ * ```
+ * 
+ * @example print(parse("{\"currency\":\"€\",\"price\":99.9}"))
+ */
 export let parse : String -> Result<JSON,JSONParseError> = (str: String) => {
   let reader = StringReader.make(str)
 
