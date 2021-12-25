@@ -35,7 +35,7 @@ is equivalent to the following JSON:
 This data structure is semantically equivalent to the JSON format allowing
 mostly lossless round trips of printing and parsing. Exceptions to this are
 white spaces, multiple ways JSON allows escaping characters in strings and
-some edge-cases related to Grain's Number type.
+some edge-cases related to Grain's `Number` type.
 
 For example parsing the following JSON text will also result in the same
 `JSON` object as above.
@@ -54,6 +54,10 @@ enum JSONToStringError {
 }
 ```
 
+Represents errors for cases when a `JSON` object cannot be represente in the
+JSON format. This can happen when it contains number values `NaN`,
+`Infinity` or `-Infinity`.
+
 ### Json.**IndentationFormat**
 
 ```grain
@@ -61,6 +65,43 @@ enum IndentationFormat {
   NoIndentation,
   IndentWithTab,
   IndentWithSpaces(Number),
+}
+```
+
+Controls how indentation is performed in custom formatting.
+
+Following examples have whitespaces and line breaks replaced with visible
+charactes for illustrative purposes.
+
+`NoIndentation`
+```json
+{↵
+"currency":·"€",↵
+"price":·99.9↵
+}
+```
+
+`IndentWithTab`
+```json
+{↵
+→"currency":·"€",↵
+→"price":·99.9↵
+}
+```
+
+`IndentWithSpaces(2)`
+```json
+{↵
+··"currency":·"€",↵
+··"price":·99.9↵
+}
+```
+
+`IndentWithSpaces(4)`
+```json
+{↵
+····"currency":·"€",↵
+····"price":·99.9↵
 }
 ```
 
@@ -73,12 +114,86 @@ enum ArrayFormat {
 }
 ```
 
+Controls how arrays are printed in custom formatting.
+
+Following examples have whitespaces and line breaks replaced with visible
+charactes for illustrative purposes.
+
+`CompactArrayEntries`
+```json
+[]
+```
+
+```json
+[1]
+```
+
+```json
+[1,2,3]
+```
+
+`OneArrayEntryPerLine`
+```json
+[]
+```
+
+```json
+[↵
+··1↵
+]
+```
+
+```json
+[↵
+··1,↵
+··2,↵
+··3↵
+]
+```
+
 ### Json.**ObjectFormat**
 
 ```grain
 enum ObjectFormat {
   CompactObjectEntries,
   OneObjectEntryPerLine,
+}
+```
+
+Controls how objects are printed in custom formatting.
+
+Following examples have whitespaces and line breaks replaced with visible
+charactes for illustrative purposes.
+
+`CompactObjectEntries`
+```json
+{}
+```
+
+```json
+{"a":1}
+```
+
+```json
+{"a":1,"b":2,"c":3}
+```
+
+`OneObjectEntryPerLine`
+```json
+{}
+```
+
+```json
+{↵
+··"a": 1↵
+}
+```
+
+```json
+{↵
+··"a": 1,↵
+··"b": 2,↵
+··"c": 3↵
 }
 ```
 
