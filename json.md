@@ -185,15 +185,15 @@ charactes for illustrative purposes.
 
 ```
 {↵
-··"a": 1↵
+··"a":·1↵
 }
 ```
 
 ```
 {↵
-··"a": 1,↵
-··"b": 2,↵
-··"c": 3↵
+··"a":·1,↵
+··"b":·2,↵
+··"c":·3↵
 }
 ```
 
@@ -207,6 +207,8 @@ enum LineEnding {
   CarriageReturn,
 }
 ```
+
+Controls line ending type in custom formatting.
 
 ### Json.**FormattingSettings**
 
@@ -223,10 +225,25 @@ record FormattingSettings {
 }
 ```
 
+Allows fine grained control of formatting in JSON printing.
+
 ### Json.**defaultCompactFormat**
 
 ```grain
 defaultCompactFormat : () -> FormattingSettings
+```
+
+Compact formatting that minimizes the size of resulting JSON at cost of not
+being easily human readable.
+
+Only performs minimal string escaping as required by the ECMA-404 standard,
+so the result needs to be treated as proper unicode and is not safe to be
+transported in ASCII encoding.
+
+The following example have whitespaces, line breaks and control points
+replaced with visible characters.
+```
+{"currency":"€","price":99.9,"currencyDescription":"EURO␡","script·unembeddable":"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·</·with·unescaped·forward·slash"}
 ```
 
 ### Json.**defaultPrettyFormat**
@@ -235,16 +252,62 @@ defaultCompactFormat : () -> FormattingSettings
 defaultPrettyFormat : () -> FormattingSettings
 ```
 
+Recommended human readable formatting.
+
+Escapes all control points for the sake of clarity, but prints unicode
+codepoints directly so the result needs to be treated as proper unicode and
+is not safe to be transported in ASCII encoding.
+
+The following example have whitespaces, line breaks and control points
+replaced with visible characters.
+```
+{↵
+··"currency":·"€",↵
+··"price":·99.9,↵
+··"currencyDescription":·"EURO\u007f",↵
+··"script·unembeddable":·"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·</·with·unescaped·forward·slash"↵
+}
+```
+
 ### Json.**defaultCompactAndSafeFormat**
 
 ```grain
 defaultCompactAndSafeFormat : () -> FormattingSettings
 ```
 
+Compact and conservative formatting to maximize compatibility and
+embeddability of the resulting JSON.
+
+Should be safe to copy and paste directly into HTML and to transported in
+plain ASCII.
+
+The following example have whitespaces, line breaks and control points
+replaced with visible characters.
+```
+{"currency":"\u20ac","price":99.9,"currencyDescription":"EURO\u007f","script·unembeddable":"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·<\/·with·unescaped·forward·slash"}
+```
+
 ### Json.**defaultPrettyAndSafeFormat**
 
 ```grain
 defaultPrettyAndSafeFormat : () -> FormattingSettings
+```
+
+Pretty and conservative formatting to maximize compatibility and
+embeddability of the resulting JSON.
+
+Should be safe to copy and paste directly into HTML and to transported in
+plain ASCII.
+
+The following example have whitespaces, line breaks and control points
+replaced with visible characters.
+```
+{↵
+··"currency":·"\u20ac",↵
+··"price":·99.9,↵
+··"currencyDescription":·"EURO\u007f",↵
+··"script·unembeddable":·"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·<\/·with·unescaped·forward·slash"↵
+}
 ```
 
 ### Json.**JSONWriterCompactImplHelper**

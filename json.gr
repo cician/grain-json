@@ -187,15 +187,15 @@ export enum ArrayFormat {
  * 
  * ```
  * {↵
- * ··"a": 1↵
+ * ··"a":·1↵
  * }
  * ```
  * 
  * ```
  * {↵
- * ··"a": 1,↵
- * ··"b": 2,↵
- * ··"c": 3↵
+ * ··"a":·1,↵
+ * ··"b":·2,↵
+ * ··"c":·3↵
  * }
  * ```
  */
@@ -204,6 +204,9 @@ export enum ObjectFormat {
   OneObjectEntryPerLine
 }
 
+/**
+ * Controls line ending type in custom formatting.
+ */
 export enum LineEnding {
   NoLineEnding,
   LineFeed,
@@ -211,6 +214,9 @@ export enum LineEnding {
   CarriageReturn
 }
 
+/**
+ * Allows fine grained control of formatting in JSON printing.
+ */
 export record FormattingSettings {
   indentation: IndentationFormat,
   arrayFormat: ArrayFormat,
@@ -222,9 +228,20 @@ export record FormattingSettings {
   escapeNonASCII: Bool
 }
 
-// Compact formatting that minimizes the size of resulting JSON at cost of not being easily human readable.
-// Only performs minimal string escaping as required by the ECMA-404 standard, so the result needs to
-// be treated as proper unicode and is not safe to be transported in ASCII encoding.
+/**
+ * Compact formatting that minimizes the size of resulting JSON at cost of not
+ * being easily human readable.
+ * 
+ * Only performs minimal string escaping as required by the ECMA-404 standard,
+ * so the result needs to be treated as proper unicode and is not safe to be
+ * transported in ASCII encoding.
+ * 
+ * The following example have whitespaces, line breaks and control points
+ * replaced with visible characters.
+ * ```
+ * {"currency":"€","price":99.9,"currencyDescription":"EURO␡","script·unembeddable":"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·</·with·unescaped·forward·slash"}
+ * ```
+ */
 export let defaultCompactFormat =
   () => {
     indentation: NoIndentation,
@@ -237,9 +254,24 @@ export let defaultCompactFormat =
     escapeNonASCII: false
   } : FormattingSettings
 
-// Recommended human readable formatting.
-// Escapes all control points for the sake of clarity, but doesn't go the extra mile to escape additional
-// sequences or unicode characters.
+/**
+ * Recommended human readable formatting.
+ * 
+ * Escapes all control points for the sake of clarity, but prints unicode
+ * codepoints directly so the result needs to be treated as proper unicode and
+ * is not safe to be transported in ASCII encoding.
+ * 
+ * The following example have whitespaces, line breaks and control points
+ * replaced with visible characters.
+ * ```
+ * {↵
+ * ··"currency":·"€",↵
+ * ··"price":·99.9,↵
+ * ··"currencyDescription":·"EURO\u007f",↵
+ * ··"script·unembeddable":·"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·</·with·unescaped·forward·slash"↵
+ * }
+ * ```
+ */
 export let defaultPrettyFormat =
   () => {
     indentation: IndentWithSpaces(2),
@@ -252,8 +284,19 @@ export let defaultPrettyFormat =
     escapeNonASCII: false
   } : FormattingSettings
 
-// Compact and conservative formatting to maximize compatibility and embeddability of the resulting JSON.
-// Should be safe to copy and paste directly into HTML and to transported in plain ASCII.
+/**
+ * Compact and conservative formatting to maximize compatibility and
+ * embeddability of the resulting JSON.
+ * 
+ * Should be safe to copy and paste directly into HTML and to transported in
+ * plain ASCII.
+ * 
+ * The following example have whitespaces, line breaks and control points
+ * replaced with visible characters.
+ * ```
+ * {"currency":"\u20ac","price":99.9,"currencyDescription":"EURO\u007f","script·unembeddable":"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·<\/·with·unescaped·forward·slash"}
+ * ```
+ */
 export let defaultCompactAndSafeFormat =
   () => {
     indentation: NoIndentation,
@@ -266,8 +309,24 @@ export let defaultCompactAndSafeFormat =
     escapeNonASCII: true
   } : FormattingSettings
 
-// Pretty and conservative formatting to maximize compatibility and embeddability of the resulting JSON.
-// Should be safe to copy and paste directly into HTML and to transported in plain ASCII.
+/**
+ * Pretty and conservative formatting to maximize compatibility and
+ * embeddability of the resulting JSON.
+ * 
+ * Should be safe to copy and paste directly into HTML and to transported in
+ * plain ASCII.
+ * 
+ * The following example have whitespaces, line breaks and control points
+ * replaced with visible characters.
+ * ```
+ * {↵
+ * ··"currency":·"\u20ac",↵
+ * ··"price":·99.9,↵
+ * ··"currencyDescription":·"EURO\u007f",↵
+ * ··"script·unembeddable":·"You·cannot·pase·a·JSON·object·directly·into·a·<script>·tag·in·HTML·if·it·contains·<\/·with·unescaped·forward·slash"↵
+ * }
+ * ```
+ */
 export let defaultPrettyAndSafeFormat =
   () => {
     indentation: IndentWithSpaces(2),
