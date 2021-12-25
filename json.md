@@ -74,7 +74,7 @@ Following examples have whitespaces and line breaks replaced with visible
 charactes for illustrative purposes.
 
 `NoIndentation`
-```json
+```
 {↵
 "currency":·"€",↵
 "price":·99.9↵
@@ -82,7 +82,7 @@ charactes for illustrative purposes.
 ```
 
 `IndentWithTab`
-```json
+```
 {↵
 →"currency":·"€",↵
 →"price":·99.9↵
@@ -90,7 +90,7 @@ charactes for illustrative purposes.
 ```
 
 `IndentWithSpaces(2)`
-```json
+```
 {↵
 ··"currency":·"€",↵
 ··"price":·99.9↵
@@ -98,7 +98,7 @@ charactes for illustrative purposes.
 ```
 
 `IndentWithSpaces(4)`
-```json
+```
 {↵
 ····"currency":·"€",↵
 ····"price":·99.9↵
@@ -120,30 +120,30 @@ Following examples have whitespaces and line breaks replaced with visible
 charactes for illustrative purposes.
 
 `CompactArrayEntries`
-```json
+```
 []
 ```
 
-```json
+```
 [1]
 ```
 
-```json
+```
 [1,2,3]
 ```
 
 `OneArrayEntryPerLine`
-```json
+```
 []
 ```
 
-```json
+```
 [↵
 ··1↵
 ]
 ```
 
-```json
+```
 [↵
 ··1,↵
 ··2,↵
@@ -166,30 +166,30 @@ Following examples have whitespaces and line breaks replaced with visible
 charactes for illustrative purposes.
 
 `CompactObjectEntries`
-```json
+```
 {}
 ```
 
-```json
+```
 {"a":1}
 ```
 
-```json
+```
 {"a":1,"b":2,"c":3}
 ```
 
 `OneObjectEntryPerLine`
-```json
+```
 {}
 ```
 
-```json
+```
 {↵
 ··"a": 1↵
 }
 ```
 
-```json
+```
 {↵
 ··"a": 1,↵
 ··"b": 2,↵
