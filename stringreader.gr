@@ -4,17 +4,13 @@ import { tagSimpleNumber } from "runtime/dataStructures"
 import Memory from "runtime/unsafe/memory"
 
 export record StringReader {
-	string: String,
-	mut charPosition: Number,
-	mut bytePosition: Number
+  string: String,
+  mut charPosition: Number,
+  mut bytePosition: Number,
 }
 
 export let make = (string: String) => {
-	{
-		string: string,
-		charPosition: 0,
-		bytePosition: 0
-	} : StringReader
+  { string, charPosition: 0, bytePosition: 0 }: (StringReader)
 }
 
 exception MalformedUnicode
@@ -71,14 +67,14 @@ let getCodePoint = (ptr: WasmI32) => {
     }
     lowerBoundary = 0x80n
     upperBoundary = 0xBFn
-    codePoint = (codePoint << 6n) | (byte & 0x3Fn)
+    codePoint = codePoint << 6n | byte & 0x3Fn
     bytesSeen += 1n
     if (bytesSeen == bytesNeeded) {
       result = codePoint
       break
     }
   }
-  result: WasmI32
+  result: (WasmI32)
 }
 
 @disableGC
@@ -102,33 +98,35 @@ export let rec readCodePointFast = (reader: StringReader) => {
 
   let mut idx = 0n
   let result = if (bytePosition < byteSize) {
-      let byte = WasmI32.load8U(ptr, 0n)
-      let codePointByteCount = if ((byte & 0x80n) == 0x00n) {
-        1n
-      } else if ((byte & 0xF0n) == 0xF0n) {
-        4n
-      } else if ((byte & 0xE0n) == 0xE0n) {
-        3n
-      } else {
-        2n
-      }
-
-      // Note that even if up to 4 bytes are needed to represent Unicode
-      // codepoints, this doesn't mean 32 bits. The highest allowed code point is
-      // 0x10FFFF and it should not change in future versions of Unicode. This
-      // means no more than 21 bits are necessary to represent a code point and
-      // thus we can use Grain's "simple" numbers that hold up to 31 bits and
-      // avoid heap allocations. `getCodePoint` will throw
-      // MalformedUnicode exception for values exceeding this limit.
-      let codePoint = getCodePoint(ptr)
-
-      reader.bytePosition = tagSimpleNumber(WasmI32.add(bytePosition, codePointByteCount))
-      reader.charPosition = tagSimpleNumber(WasmI32.add(charPosition, 1n))
-
-      tagSimpleNumber(codePoint)
+    let byte = WasmI32.load8U(ptr, 0n)
+    let codePointByteCount = if ((byte & 0x80n) == 0x00n) {
+      1n
+    } else if ((byte & 0xF0n) == 0xF0n) {
+      4n
+    } else if ((byte & 0xE0n) == 0xE0n) {
+      3n
     } else {
-      -1
+      2n
     }
+
+    // Note that even if up to 4 bytes are needed to represent Unicode
+    // codepoints, this doesn't mean 32 bits. The highest allowed code point is
+    // 0x10FFFF and it should not change in future versions of Unicode. This
+    // means no more than 21 bits are necessary to represent a code point and
+    // thus we can use Grain's "simple" numbers that hold up to 31 bits and
+    // avoid heap allocations. `getCodePoint` will throw
+    // MalformedUnicode exception for values exceeding this limit.
+    let codePoint = getCodePoint(ptr)
+
+    reader.bytePosition = tagSimpleNumber(
+      WasmI32.add(bytePosition, codePointByteCount),
+    )
+    reader.charPosition = tagSimpleNumber(WasmI32.add(charPosition, 1n))
+
+    tagSimpleNumber(codePoint)
+  } else {
+    -1
+  }
 
   Memory.decRef(WasmI32.fromGrain(reader))
   Memory.decRef(WasmI32.fromGrain(readCodePointFast))
@@ -137,10 +135,10 @@ export let rec readCodePointFast = (reader: StringReader) => {
 }
 
 export let readCodePoint = (reader: StringReader) => {
-	let codePoint = readCodePointFast(reader)
-	if (codePoint > 0) {
-		Some(codePoint)
-	} else {
-		None
-	}
+  let codePoint = readCodePointFast(reader)
+  if (codePoint > 0) {
+    Some(codePoint)
+  } else {
+    None
+  }
 }
