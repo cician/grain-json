@@ -1421,6 +1421,7 @@ export enum JSONParseError {
 
 record JSONParserImplHelper {
   reader: StringReader.StringReader,
+  bufferParse: Buffer.Buffer,
   mut currentCodePoint: Number,
   mut pos: Number,
 }
@@ -1637,14 +1638,14 @@ parseFalseValue = (parserImplHelper: JSONParserImplHelper) => {
   }
 },
 parseString = (parserImplHelper: JSONParserImplHelper) => {
-  // TODO Reuse the buffer for each string.
   match (expectCodePointAndAdvance(0x22, parserImplHelper)) {
     // '"'
     Some(e) => Err(e),
     None => {
       let mut err = None
       let mut done = false
-      let buffer = Buffer.make(16)
+      let buffer = parserImplHelper.bufferParse
+      Buffer.clear(buffer)
 
       while (!done) {
         match (parserImplHelper.currentCodePoint) {
@@ -2198,6 +2199,7 @@ export let parse: String -> Result<JSON, JSONParseError> = (str: String) => {
 
   let parserImplHelper = {
     reader,
+    bufferParse: Buffer.make(16),
     currentCodePoint: StringReader.readCodePointFast(reader),
     pos: 0,
   }:
