@@ -70,7 +70,9 @@ export enum JSON {
  * JSON format along with a human readable text message. This can happen when
  * it contains number values `NaN`, `Infinity` or `-Infinity`.
  */
-export enum JSONToStringError { InvalidNumber(String) }
+export enum JSONToStringError {
+  InvalidNumber(String),
+}
 
 /**
  * Controls how indentation is performed in custom formatting.
@@ -154,7 +156,10 @@ export enum IndentationFormat {
  * ]
  * ```
  */
-export enum ArrayFormat { CompactArrayEntries, OneArrayEntryPerLine }
+export enum ArrayFormat {
+  CompactArrayEntries,
+  OneArrayEntryPerLine,
+}
 
 /**
  * Controls how objects are printed in custom formatting.
@@ -194,7 +199,10 @@ export enum ArrayFormat { CompactArrayEntries, OneArrayEntryPerLine }
  * }
  * ```
  */
-export enum ObjectFormat { CompactObjectEntries, OneObjectEntryPerLine }
+export enum ObjectFormat {
+  CompactObjectEntries,
+  OneObjectEntryPerLine,
+}
 
 /**
  * Controls line ending type in custom formatting.
@@ -244,8 +252,7 @@ export let defaultCompactFormat = () =>
     escapeAllControlPoints: false,
     escapeHTMLUnsafeSequences: false,
     escapeNonASCII: false,
-  }:
-    (FormattingSettings)
+  }: FormattingSettings
 
 /**
  * Recommended human readable formatting.
@@ -275,8 +282,7 @@ export let defaultPrettyFormat = () =>
     escapeAllControlPoints: true,
     escapeHTMLUnsafeSequences: false,
     escapeNonASCII: false,
-  }:
-    (FormattingSettings)
+  }: FormattingSettings
 
 /**
  * Compact and conservative formatting to maximize compatibility and
@@ -301,8 +307,7 @@ export let defaultCompactAndSafeFormat = () =>
     escapeAllControlPoints: true,
     escapeHTMLUnsafeSequences: true,
     escapeNonASCII: true,
-  }:
-    (FormattingSettings)
+  }: FormattingSettings
 
 /**
  * Pretty and conservative formatting to maximize compatibility and
@@ -332,8 +337,7 @@ export let defaultPrettyAndSafeFormat = () =>
     escapeAllControlPoints: true,
     escapeHTMLUnsafeSequences: true,
     escapeNonASCII: true,
-  }:
-    (FormattingSettings)
+  }: FormattingSettings
 
 record JSONWriterCompactImplHelper {
   buffer: Buffer.Buffer,
@@ -355,7 +359,9 @@ record JSONWriterPrettyImplHelper {
 // For now this is not exposed and remains an internal implementation detail.
 // It may make sense in the future to expose it and let the user reuse a writer for multiple
 // JSON emit operations without reallocating new closures and buffers each time.
-record JSONWriter { emit: JSON -> Option<JSONToStringError> }
+record JSONWriter {
+  emit: JSON -> Option<JSONToStringError>,
+}
 
 let addCharFromCodePoint = (codePoint: Number, buffer: Buffer.Buffer) => {
   Buffer.addChar(Char.fromCode(codePoint), buffer)
@@ -626,7 +632,7 @@ let rec printNumber = (value: Number, buffer: Buffer.Buffer) => {
             // in the denominator.
             let asWasmF64 = WasmF64.div(
               WasmF64.convertI32S(Numbers.boxedRationalNumerator(ptr)),
-              WasmF64.convertI32S(Numbers.boxedRationalDenominator(ptr)),
+              WasmF64.convertI32S(Numbers.boxedRationalDenominator(ptr))
             )
 
             printNumberWasmF64(asWasmF64, buffer)
@@ -721,7 +727,7 @@ let rec printElementCompact =
 
           let mut err = None
 
-          for (let mut index = 0;; index += 1) {
+          for (let mut index = 0; ; index += 1) {
             if (index > 0) {
               // printer.write(",")
               addCharFromCodePoint(0x2C, buffer)
@@ -783,7 +789,7 @@ let rec printElementCompact =
 
           let mut err = None
 
-          for (let mut index = 0;; index += 1) {
+          for (let mut index = 0; ; index += 1) {
             if (index > 0) {
               // printer.write(",")
               addCharFromCodePoint(0x2C, buffer)
@@ -856,8 +862,7 @@ let makeCompactJSONWriter = (buffer: Buffer.Buffer) => {
     emitEscapedQuotedString: s => {
       emitEscapedQuotedString(s)
     },
-  }:
-    (JSONWriterCompactImplHelper)
+  }: JSONWriterCompactImplHelper
 
   {
     emit: json => {
@@ -865,8 +870,7 @@ let makeCompactJSONWriter = (buffer: Buffer.Buffer) => {
 
       error
     },
-  }:
-    (JSONWriter)
+  }: JSONWriter
 }
 
 // Note that this could relatively easily be integrated with
@@ -948,7 +952,7 @@ let rec printElementPretty =
 
           let elemLevel = indentationLevel + 1
 
-          for (let mut index = 0;; index += 1) {
+          for (let mut index = 0; ; index += 1) {
             if (index > 0) {
               // printer.write(",")
               addCharFromCodePoint(0x2C, buffer)
@@ -1056,7 +1060,7 @@ let rec printElementPretty =
 
           let elemLevel = indentationLevel + 1
 
-          for (let mut index = 0;; index += 1) {
+          for (let mut index = 0; ; index += 1) {
             if (index > 0) {
               // printer.write(",")
               addCharFromCodePoint(0x2C, buffer)
@@ -1119,7 +1123,8 @@ let rec printElementPretty =
 }
 
 let isCodePointInBasicMultilingualPlane = (code: Number) =>
-  code >= 0x0000 && code <= 0xFFFF
+  code >= 0x0000 &&
+  code <= 0xFFFF
 
 let isHighSurrogate = (code: Number) => code >= 0xD800 && code <= 0xDBFF
 
@@ -1203,8 +1208,9 @@ let makePrettyPrintJSONWriter =
   // "\\/", not necessarily "\u002F"). This more conservative approach only
   // escapes it when needed, but requires to keep track of the previous code
   // point in the iteration so it's more complicated and handled separately.
-  let emitCodePoint = if (!format.escapeAllControlPoints &&
-  !format.escapeNonASCII) {
+  let emitCodePoint = if (
+    !format.escapeAllControlPoints && !format.escapeNonASCII
+  ) {
     (codePoint: Number) => {
       if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C) {
         addCharFromCodePoint(codePoint, buffer)
@@ -1217,8 +1223,12 @@ let makePrettyPrintJSONWriter =
     // escaped code points are those in the range of ASCII chacarcters
     // from 31 to 127.
     (codePoint: Number) => {
-      if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C &&
-      codePoint < 128) {
+      if (
+        codePoint > 31 &&
+        codePoint != 0x0022 &&
+        codePoint != 0x005C &&
+        codePoint < 128
+      ) {
         addCharFromCodePoint(codePoint, buffer)
       } else {
         emitEscapedCodePoint(codePoint, buffer)
@@ -1230,9 +1240,13 @@ let makePrettyPrintJSONWriter =
     // There could be more control points or otherwise escape worthy
     // codepoints, but covering that would be overkill.
     (codePoint: Number) => {
-      if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C &&
-      codePoint < 127 ||
-      codePoint > 159) {
+      if (
+        codePoint > 31 &&
+        codePoint != 0x0022 &&
+        codePoint != 0x005C &&
+        codePoint < 127 ||
+        codePoint > 159
+      ) {
         addCharFromCodePoint(codePoint, buffer)
       } else {
         emitEscapedCodePoint(codePoint, buffer)
@@ -1244,8 +1258,12 @@ let makePrettyPrintJSONWriter =
     // escapeNonASCII=true, but also escape the ASCII control codepoint
     // 127 (Delete).
     (codePoint: Number) => {
-      if (codePoint > 31 && codePoint != 0x0022 && codePoint != 0x005C &&
-      codePoint < 127) {
+      if (
+        codePoint > 31 &&
+        codePoint != 0x0022 &&
+        codePoint != 0x005C &&
+        codePoint < 127
+      ) {
         // fast path for chars that never need any escaping
         addCharFromCodePoint(codePoint, buffer)
       } else {
@@ -1280,26 +1298,23 @@ let makePrettyPrintJSONWriter =
 
       let mut prevCodePoint = 0
 
-      String.forEachCodePoint(
-        codePoint => {
-          if (codePoint == 47) {
-            if (format.escapeHTMLUnsafeSequences && prevCodePoint == 60) {
-              //printer.write("\\/")
-              addCharFromCodePoint(92, buffer)
-              addCharFromCodePoint(47, buffer)
-            } else {
-              // otherwise just emit the slash as-is
-              //printer.writeChar('/')
-              addCharFromCodePoint(codePoint, buffer)
-            }
+      String.forEachCodePoint(codePoint => {
+        if (codePoint == 47) {
+          if (format.escapeHTMLUnsafeSequences && prevCodePoint == 60) {
+            //printer.write("\\/")
+            addCharFromCodePoint(92, buffer)
+            addCharFromCodePoint(47, buffer)
           } else {
-            emitCodePoint(codePoint)
+            // otherwise just emit the slash as-is
+            //printer.writeChar('/')
+            addCharFromCodePoint(codePoint, buffer)
           }
+        } else {
+          emitCodePoint(codePoint)
+        }
 
-          prevCodePoint = codePoint
-        },
-        s,
-      )
+        prevCodePoint = codePoint
+      }, s)
 
       addCharFromCodePoint(0x22, buffer)
     }
@@ -1313,8 +1328,7 @@ let makePrettyPrintJSONWriter =
     },
     printNewLine,
     printIndentation,
-  }:
-    (JSONWriterPrettyImplHelper)
+  }: JSONWriterPrettyImplHelper
 
   {
     emit: json => {
@@ -1326,8 +1340,7 @@ let makePrettyPrintJSONWriter =
 
       error
     },
-  }:
-    (JSONWriter)
+  }: JSONWriter
 }
 
 /**
@@ -1470,11 +1483,11 @@ let buildUnexpectedTokenError =
   let pos = parserImplHelper.pos
   if (codePoint == _END_OF_INPUT) {
     UnexpectedEndOfInput(
-      "Unexpected token at position " ++ runtimeToString(pos) ++ ": " ++ detail,
+      "Unexpected token at position " ++ runtimeToString(pos) ++ ": " ++ detail
     )
   } else {
     UnexpectedToken(
-      "Unexpected token at position " ++ runtimeToString(pos) ++ ": " ++ detail,
+      "Unexpected token at position " ++ runtimeToString(pos) ++ ": " ++ detail
     )
   }
 }
@@ -1525,9 +1538,10 @@ let expectCodePointAndAdvance =
     next(parserImplHelper)
     None
   } else {
-    let detail = "expected " ++ formatCodePointOrEOF(expectedCodePoint) ++
-    ", found " ++
-    formatCodePointOrEOF(c)
+    let detail = "expected " ++
+      formatCodePointOrEOF(expectedCodePoint) ++
+      ", found " ++
+      formatCodePointOrEOF(c)
     Some(buildUnexpectedTokenError(parserImplHelper, detail))
   }
 }
@@ -1547,7 +1561,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
       parseNumberValue(parserImplHelper), // '0'..'9' or '-'
     c => {
       let detail = "expected start of a JSON value, found " ++
-      formatCodePointOrEOF(c)
+        formatCodePointOrEOF(c)
       Err(buildUnexpectedTokenError(parserImplHelper, detail))
     },
   }
@@ -1555,8 +1569,7 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
   skipWhiteSpace(parserImplHelper)
 
   result
-},
-parseNullValue = (parserImplHelper: JSONParserImplHelper) => {
+}, parseNullValue = (parserImplHelper: JSONParserImplHelper) => {
   match (expectCodePointAndAdvance(0x6E, parserImplHelper)) {
     // 'n'
     Some(e) => Err(e),
@@ -1580,8 +1593,7 @@ parseNullValue = (parserImplHelper: JSONParserImplHelper) => {
       }
     },
   }
-},
-parseTrueValue = (parserImplHelper: JSONParserImplHelper) => {
+}, parseTrueValue = (parserImplHelper: JSONParserImplHelper) => {
   match (expectCodePointAndAdvance(0x74, parserImplHelper)) {
     // 't'
     Some(e) => Err(e),
@@ -1605,8 +1617,7 @@ parseTrueValue = (parserImplHelper: JSONParserImplHelper) => {
       }
     },
   }
-},
-parseFalseValue = (parserImplHelper: JSONParserImplHelper) => {
+}, parseFalseValue = (parserImplHelper: JSONParserImplHelper) => {
   match (expectCodePointAndAdvance(0x66, parserImplHelper)) {
     // 'f'
     Some(e) => Err(e),
@@ -1636,8 +1647,7 @@ parseFalseValue = (parserImplHelper: JSONParserImplHelper) => {
       }
     },
   }
-},
-parseString = (parserImplHelper: JSONParserImplHelper) => {
+}, parseString = (parserImplHelper: JSONParserImplHelper) => {
   match (expectCodePointAndAdvance(0x22, parserImplHelper)) {
     // '"'
     Some(e) => Err(e),
@@ -1738,21 +1748,24 @@ parseString = (parserImplHelper: JSONParserImplHelper) => {
 
                     let mut digit = hexDigitCodePoint
 
-                    if (hexDigitCodePoint >= 48 &&
-                    hexDigitCodePoint <= 57) { // 0..9
+                    if (
+                      hexDigitCodePoint >= 48 && hexDigitCodePoint <= 57
+                    ) { // 0..9
                       digit -= 48
-                    } else if (hexDigitCodePoint >= 65 &&
-                    hexDigitCodePoint <= 70) { // A..F
+                    } else if (
+                      hexDigitCodePoint >= 65 && hexDigitCodePoint <= 70
+                    ) { // A..F
                       digit -= 55 // (65 - 10)
-                    } else if (hexDigitCodePoint >= 97 &&
-                    hexDigitCodePoint <= 102) { // a..f
+                    } else if (
+                      hexDigitCodePoint >= 97 && hexDigitCodePoint <= 102
+                    ) { // a..f
                       digit -= 87 // (97 - 10)
                     } else {
                       let digitsSoFar = 3 - digitIndex
                       let detail = "expected exactly 4 hexadecimal digits in the UTF-16 escape sequence, found only " ++
-                      runtimeToString(digitsSoFar)
+                        runtimeToString(digitsSoFar)
                       err = Some(
-                        buildUnexpectedTokenError(parserImplHelper, detail),
+                        buildUnexpectedTokenError(parserImplHelper, detail)
                       )
                       break
                     }
@@ -1781,17 +1794,19 @@ parseString = (parserImplHelper: JSONParserImplHelper) => {
                       // Keep the high surrogate and proceed to the second
                       // iteration of the loop.
                       highSurrogate = codeUnit
-                    } else if (isCodePointInBasicMultilingualPlane(codeUnit) &&
-                    !isLowSurrogate(codeUnit)) {
+                    } else if (
+                      isCodePointInBasicMultilingualPlane(codeUnit) &&
+                      !isLowSurrogate(codeUnit)
+                    ) {
                       let codePoint = codeUnit
                       addCharFromCodePoint(codePoint, buffer)
                       break
                     } else {
                       let message = "Invalid character escape sequence at position " ++
-                      runtimeToString(escapeStartPos) ++
-                      ": expected a Unicode code point in Basic Multilingual Plane (U+0000..U+FFFF) or a high surrogate (0xD800..0xDBFF) of a UTF-16 surrogate pair, found " ++
-                      "0x" ++
-                      toHexWithZeroPadding(codeUnit, 4)
+                        runtimeToString(escapeStartPos) ++
+                        ": expected a Unicode code point in Basic Multilingual Plane (U+0000..U+FFFF) or a high surrogate (0xD800..0xDBFF) of a UTF-16 surrogate pair, found " ++
+                        "0x" ++
+                        toHexWithZeroPadding(codeUnit, 4)
                       err = Some(InvalidUTF16SurrogatePair(message))
                       break
                     }
@@ -1802,16 +1817,16 @@ parseString = (parserImplHelper: JSONParserImplHelper) => {
                       let lowSurrogate = codeUnit
                       let combinedCodePoint = combineSurrogatePairToCodePoint(
                         highSurrogate,
-                        lowSurrogate,
+                        lowSurrogate
                       )
                       addCharFromCodePoint(combinedCodePoint, buffer)
                       break
                     } else {
                       let message = "Invalid character escape sequence at position " ++
-                      runtimeToString(escapeStartPos) ++
-                      ": expected a low surrogate (0xDC00..0xDFFF) in the second code unit of the UTF-16 sequence, found " ++
-                      "0x" ++
-                      toHexWithZeroPadding(codeUnit, 4)
+                        runtimeToString(escapeStartPos) ++
+                        ": expected a low surrogate (0xDC00..0xDFFF) in the second code unit of the UTF-16 sequence, found " ++
+                        "0x" ++
+                        toHexWithZeroPadding(codeUnit, 4)
                       err = Some(InvalidUTF16SurrogatePair(message))
                       break
                     }
@@ -1824,7 +1839,7 @@ parseString = (parserImplHelper: JSONParserImplHelper) => {
                 // JSON doesn't allow arbitrary characters to be preceded by backslash escape.
                 // Only the ones above.
                 let detail = "expected a valid escape sequence or the end of string, found " ++
-                formatCodePointOrEOF(unexpectedCodePoint)
+                  formatCodePointOrEOF(unexpectedCodePoint)
                 err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
                 break
               },
@@ -1847,8 +1862,8 @@ parseString = (parserImplHelper: JSONParserImplHelper) => {
             Err(
               buildUnexpectedTokenError(
                 parserImplHelper,
-                "unexpected end of string value",
-              ),
+                "unexpected end of string value"
+              )
             )
           }
         },
@@ -1856,14 +1871,12 @@ parseString = (parserImplHelper: JSONParserImplHelper) => {
       }
     },
   }
-},
-parseStringValue = (parserImplHelper: JSONParserImplHelper) => {
+}, parseStringValue = (parserImplHelper: JSONParserImplHelper) => {
   match (parseString(parserImplHelper)) {
     Ok(s) => Ok(JSONString(s)),
     Err(e) => Err(e),
   }
-},
-parseNumberValue = (parserImplHelper: JSONParserImplHelper) => {
+}, parseNumberValue = (parserImplHelper: JSONParserImplHelper) => {
   // First char can optionally be a minus sign.
   let mut c = parserImplHelper.currentCodePoint
   let isNegative = c == 0x2D
@@ -1923,7 +1936,7 @@ parseNumberValue = (parserImplHelper: JSONParserImplHelper) => {
       // The integer part of the number has to have at least one digit.
       // JSON doesn't allow numbers starting with decimal separator like ".1".
       let detail = "expected a decimal digit, found " ++
-      formatCodePointOrEOF(unexpectedCodePoint)
+        formatCodePointOrEOF(unexpectedCodePoint)
       err = Some(buildUnexpectedTokenError(parserImplHelper, detail))
     },
   }
@@ -2021,8 +2034,7 @@ parseNumberValue = (parserImplHelper: JSONParserImplHelper) => {
       Ok(JSONNumber(result))
     },
   }
-},
-parseArray = (parserImplHelper: JSONParserImplHelper) => {
+}, parseArray = (parserImplHelper: JSONParserImplHelper) => {
   match (expectCodePointAndAdvance(0x5B, parserImplHelper)) {
     // '['
     Some(e) => Err(e),
@@ -2074,16 +2086,15 @@ parseArray = (parserImplHelper: JSONParserImplHelper) => {
             Err(
               buildUnexpectedTokenError(
                 parserImplHelper,
-                "unexpected end of array",
-              ),
+                "unexpected end of array"
+              )
             )
           }
         },
       }
     },
   }
-},
-parseObject = (parserImplHelper: JSONParserImplHelper) => {
+}, parseObject = (parserImplHelper: JSONParserImplHelper) => {
   match (expectCodePointAndAdvance(0x7B, parserImplHelper)) {
     // '{'
     Some(e) => Err(e),
@@ -2171,8 +2182,8 @@ parseObject = (parserImplHelper: JSONParserImplHelper) => {
             Err(
               buildUnexpectedTokenError(
                 parserImplHelper,
-                "unexpected end of object",
-              ),
+                "unexpected end of object"
+              )
             )
           }
         },
@@ -2202,8 +2213,7 @@ export let parse: String -> Result<JSON, JSONParseError> = (str: String) => {
     bufferParse: Buffer.make(16),
     currentCodePoint: StringReader.readCodePointFast(reader),
     pos: 0,
-  }:
-    (JSONParserImplHelper)
+  }: JSONParserImplHelper
 
   let root = parseValue(parserImplHelper)
 
@@ -2215,7 +2225,7 @@ export let parse: String -> Result<JSON, JSONParseError> = (str: String) => {
     match (root) {
       Ok(_) => {
         let detail = "expected end of input, found " ++
-        formatCodePointOrEOF(parserImplHelper.currentCodePoint)
+          formatCodePointOrEOF(parserImplHelper.currentCodePoint)
         Err(buildUnexpectedTokenError(parserImplHelper, detail))
       },
       e => e,

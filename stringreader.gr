@@ -10,7 +10,7 @@ export record StringReader {
 }
 
 export let make = (string: String) => {
-  { string, charPosition: 0, bytePosition: 0 }: (StringReader)
+  { string, charPosition: 0, bytePosition: 0 }: StringReader
 }
 
 exception MalformedUnicode
@@ -74,7 +74,7 @@ let getCodePoint = (ptr: WasmI32) => {
       break
     }
   }
-  result: (WasmI32)
+  result: WasmI32
 }
 
 @disableGC
@@ -119,7 +119,7 @@ export let rec readCodePointFast = (reader: StringReader) => {
     let codePoint = getCodePoint(ptr)
 
     reader.bytePosition = tagSimpleNumber(
-      WasmI32.add(bytePosition, codePointByteCount),
+      WasmI32.add(bytePosition, codePointByteCount)
     )
     reader.charPosition = tagSimpleNumber(WasmI32.add(charPosition, 1n))
 
