@@ -136,7 +136,7 @@ export let rec readCodePointFast = (reader: StringReader) => {
 
 export let readCodePoint = (reader: StringReader) => {
   let codePoint = readCodePointFast(reader)
-  if (codePoint > 0) {
+  if (codePoint >= 0) {
     Some(codePoint)
   } else {
     None
