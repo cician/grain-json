@@ -380,9 +380,8 @@ let emitUTF16EscapeSequence = (codePoint: Number, buffer: Buffer.Buffer) => {
   // this codepath is only for escape sequences, which probably aren't all
   // that common occurence.
 
-  //Buffer.addChar("\\u", buffer)
-  addCharFromCodePoint(92, buffer)
-  addCharFromCodePoint(117, buffer)
+  Buffer.addChar('\\', buffer)
+  Buffer.addChar('u', buffer)
   // Loop over the four digit from most to least significant.
   for (let mut digitIndex = 3; digitIndex >= 0; digitIndex -= 1) {
     // Use bit masking and shifting to extract from the codepoint a number
@@ -431,9 +430,7 @@ let emitEscapedUnicodeSequence = (codePoint: Number, buffer: Buffer.Buffer) => {
     let lowSurrogate = (uPrime & 0b00000000001111111111) + 0xDC00
     // Low surrogate
 
-    // emitUTF16EscapeSequence(highSurrogate, writer)
     emitUTF16EscapeSequence(highSurrogate, buffer)
-    // emitUTF16EscapeSequence(lowSurrogate, writer)
     emitUTF16EscapeSequence(lowSurrogate, buffer)
   }
 }
@@ -441,39 +438,32 @@ let emitEscapedUnicodeSequence = (codePoint: Number, buffer: Buffer.Buffer) => {
 let emitEscapedCodePoint = (codePoint: Number, buffer: Buffer.Buffer) => {
   match (codePoint) {
     0x0008 => { // backspace
-      //printer.write("\\b")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x62, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('b', buffer)
     },
     0x0009 => { // tab
-      //printer.write("\\t")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x74, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('t', buffer)
     },
     0x000A => { // line feed
-      //printer.write("\\n")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x6E, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('n', buffer)
     },
     0x000C => { // form feed
-      //printer.write("\\f")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x66, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('f', buffer)
     },
     0x000D => { // carriage return
-      //printer.write("\\r")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x72, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('r', buffer)
     },
     0x0022 => { // quotation mark
-      //printer.write("\\\"")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x22, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('"', buffer)
     },
     0x005C => { // backslash or "Reverse Solidus"
-      //printer.write("\\\\")
-      addCharFromCodePoint(0x5C, buffer)
-      addCharFromCodePoint(0x5C, buffer)
+      Buffer.addChar('\\', buffer)
+      Buffer.addChar('\\', buffer)
     },
     _ => {
       emitEscapedUnicodeSequence(codePoint, buffer)
@@ -700,27 +690,23 @@ let rec printElementCompact =
       // it in emitJSONElement.
       match (elems) {
         [] => {
-          //printer.write("[]")
-          addCharFromCodePoint(0x5B, buffer)
-          addCharFromCodePoint(0x5D, buffer)
+          Buffer.addChar('[', buffer)
+          Buffer.addChar(']', buffer)
           None
         },
         [e] => {
-          //printer.write("[")
-          addCharFromCodePoint(0x5B, buffer)
+          Buffer.addChar('[', buffer)
 
           let err = printElementCompact(e, implHelper)
 
           if (Option.isNone(err)) {
-            //printer.write("]")
-            addCharFromCodePoint(0x5D, buffer)
+            Buffer.addChar(']', buffer)
           }
 
           err
         },
         [initialHead, ...initialRest] => {
-          // printer.write("[")
-          addCharFromCodePoint(0x5B, buffer)
+          Buffer.addChar('[', buffer)
 
           let mut currentHead = initialHead
           let mut currentRest = initialRest
@@ -729,8 +715,7 @@ let rec printElementCompact =
 
           for (let mut index = 0; ; index += 1) {
             if (index > 0) {
-              // printer.write(",")
-              addCharFromCodePoint(0x2C, buffer)
+              Buffer.addChar(',', buffer)
             }
 
             err = printElementCompact(currentHead, implHelper)
@@ -746,8 +731,7 @@ let rec printElementCompact =
           }
 
           if (Option.isNone(err)) {
-            // printer.write("]")
-            addCharFromCodePoint(0x5D, buffer)
+            Buffer.addChar(']', buffer)
           }
 
           err
@@ -757,32 +741,27 @@ let rec printElementCompact =
     JSONObject(entries) => {
       match (entries) {
         [] => {
-          // printer.write("{}")
-          addCharFromCodePoint(0x7B, buffer)
-          addCharFromCodePoint(0x7D, buffer)
+          Buffer.addChar('{', buffer)
+          Buffer.addChar('}', buffer)
           None
         },
         [(key, value)] => {
-          //printer.writeChar('{')
-          addCharFromCodePoint(0x7B, buffer)
+          Buffer.addChar('{', buffer)
 
           implHelper.emitEscapedQuotedString(key)
 
-          //printer.writeChar(':')
-          addCharFromCodePoint(0x3A, buffer)
+          Buffer.addChar(':', buffer)
 
           let err = printElementCompact(value, implHelper)
 
           if (Option.isNone(err)) {
-            // printer.writeChar('}')
-            addCharFromCodePoint(0x7D, buffer)
+            Buffer.addChar('}', buffer)
           }
 
           err
         },
         [initialHead, ...initialRest] => {
-          // printer.writeChar('{')
-          addCharFromCodePoint(0x7B, buffer)
+          Buffer.addChar('{', buffer)
 
           let mut currentHead = initialHead
           let mut currentRest = initialRest
@@ -791,16 +770,14 @@ let rec printElementCompact =
 
           for (let mut index = 0; ; index += 1) {
             if (index > 0) {
-              // printer.write(",")
-              addCharFromCodePoint(0x2C, buffer)
+              Buffer.addChar(',', buffer)
             }
 
             let (key, value) = currentHead
 
             implHelper.emitEscapedQuotedString(key)
 
-            //printer.writeChar(':')
-            addCharFromCodePoint(0x3A, buffer)
+            Buffer.addChar(':', buffer)
 
             err = printElementCompact(value, implHelper)
 
@@ -818,8 +795,7 @@ let rec printElementCompact =
           }
 
           if (Option.isNone(err)) {
-            // printer.writeChar('}')
-            addCharFromCodePoint(0x7D, buffer)
+            Buffer.addChar('}', buffer)
           }
 
           err
@@ -848,13 +824,11 @@ let makeCompactJSONWriter = (buffer: Buffer.Buffer) => {
   }
 
   let emitEscapedQuotedString = (s: String) => {
-    //printer.write("\"")
-    addCharFromCodePoint(0x22, buffer)
+    Buffer.addChar('"', buffer)
 
     String.forEachCodePoint(emitCodePoint, s)
 
-    //printer.write("\"")
-    addCharFromCodePoint(0x22, buffer)
+    Buffer.addChar('"', buffer)
   }
 
   let implHelper = {
@@ -900,16 +874,14 @@ let rec printElementPretty =
     JSONArray(elems) => {
       match (elems) {
         [] => {
-          //printer.write("[]")
-          addCharFromCodePoint(0x5B, buffer)
-          addCharFromCodePoint(0x5D, buffer)
+          Buffer.addChar('[', buffer)
+          Buffer.addChar(']', buffer)
           None
         },
         [e] => {
           let format = implHelper.format
 
-          //printer.write("[")
-          addCharFromCodePoint(0x5B, buffer)
+          Buffer.addChar('[', buffer)
 
           if (format.arrayFormat == OneArrayEntryPerLine) {
             implHelper.printNewLine()
@@ -929,8 +901,7 @@ let rec printElementPretty =
               implHelper.printIndentation(indentationLevel)
             }
 
-            //printer.write("]")
-            addCharFromCodePoint(0x5D, buffer)
+            Buffer.addChar(']', buffer)
           }
 
           err
@@ -938,8 +909,7 @@ let rec printElementPretty =
         [initialHead, ...initialRest] => {
           let format = implHelper.format
 
-          // printer.write("[")
-          addCharFromCodePoint(0x5B, buffer)
+          Buffer.addChar('[', buffer)
 
           if (format.arrayFormat == OneArrayEntryPerLine) {
             implHelper.printNewLine()
@@ -954,8 +924,7 @@ let rec printElementPretty =
 
           for (let mut index = 0; ; index += 1) {
             if (index > 0) {
-              // printer.write(",")
-              addCharFromCodePoint(0x2C, buffer)
+              Buffer.addChar(',', buffer)
 
               if (format.arrayFormat == OneArrayEntryPerLine) {
                 implHelper.printNewLine()
@@ -986,8 +955,7 @@ let rec printElementPretty =
               implHelper.printIndentation(indentationLevel)
             }
 
-            // printer.write("]")
-            addCharFromCodePoint(0x5D, buffer)
+            Buffer.addChar(']', buffer)
           }
 
           err
@@ -997,16 +965,14 @@ let rec printElementPretty =
     JSONObject(entries) => {
       match (entries) {
         [] => {
-          // printer.write("{}")
-          addCharFromCodePoint(0x7B, buffer)
-          addCharFromCodePoint(0x7D, buffer)
+          Buffer.addChar('{', buffer)
+          Buffer.addChar('}', buffer)
           None
         },
         [(key, value)] => {
           let format = implHelper.format
 
-          //printer.writeChar('{')
-          addCharFromCodePoint(0x7B, buffer)
+          Buffer.addChar('{', buffer)
 
           let elemLevel = indentationLevel + 1
 
@@ -1019,13 +985,11 @@ let rec printElementPretty =
 
           match (format.objectFormat) {
             CompactObjectEntries => {
-              //printer.writeChar(':')
-              addCharFromCodePoint(0x3A, buffer)
+              Buffer.addChar(':', buffer)
             },
             OneObjectEntryPerLine => {
-              //printer.writeChar(':')
-              addCharFromCodePoint(0x3A, buffer)
-              addCharFromCodePoint(0x20, buffer)
+              Buffer.addChar(':', buffer)
+              Buffer.addChar(' ', buffer)
             },
           }
 
@@ -1037,8 +1001,7 @@ let rec printElementPretty =
               implHelper.printIndentation(indentationLevel)
             }
 
-            // printer.writeChar('}')
-            addCharFromCodePoint(0x7D, buffer)
+            Buffer.addChar('}', buffer)
           }
 
           err
@@ -1046,8 +1009,7 @@ let rec printElementPretty =
         [initialHead, ...initialRest] => {
           let format = implHelper.format
 
-          // printer.writeChar('{')
-          addCharFromCodePoint(0x7B, buffer)
+          Buffer.addChar('{', buffer)
 
           if (format.objectFormat == OneObjectEntryPerLine) {
             implHelper.printNewLine()
@@ -1062,8 +1024,7 @@ let rec printElementPretty =
 
           for (let mut index = 0; ; index += 1) {
             if (index > 0) {
-              // printer.write(",")
-              addCharFromCodePoint(0x2C, buffer)
+              Buffer.addChar(',', buffer)
 
               if (format.objectFormat == OneObjectEntryPerLine) {
                 implHelper.printNewLine()
@@ -1080,13 +1041,11 @@ let rec printElementPretty =
 
             match (format.objectFormat) {
               CompactObjectEntries => {
-                //printer.writeChar(':')
-                addCharFromCodePoint(0x3A, buffer)
+                Buffer.addChar(':', buffer)
               },
               OneObjectEntryPerLine => {
-                //printer.write(": ")
-                addCharFromCodePoint(0x3A, buffer)
-                addCharFromCodePoint(0x20, buffer)
+                Buffer.addChar(':', buffer)
+                Buffer.addChar(' ', buffer)
               },
             }
 
@@ -1111,8 +1070,7 @@ let rec printElementPretty =
               implHelper.printIndentation(indentationLevel)
             }
 
-            // printer.writeChar('}')
-            addCharFromCodePoint(0x7D, buffer)
+            Buffer.addChar('}', buffer)
           }
 
           err
@@ -1150,19 +1108,16 @@ let makePrettyPrintJSONWriter =
     NoLineEnding => () => void,
     LineFeed =>
       () => {
-        //printer.writeChar('\n')
-        addCharFromCodePoint(0x0A, buffer)
+        Buffer.addChar('\n', buffer)
       },
     CarriageReturnLineFeed =>
       () => {
-        //printer.write("\r\n")
-        addCharFromCodePoint(0x0D, buffer)
-        addCharFromCodePoint(0x0A, buffer)
+        Buffer.addChar('\r', buffer)
+        Buffer.addChar('\n', buffer)
       },
     CarriageReturn =>
       () => {
-        //printer.writeChar('\r')
-        addCharFromCodePoint(0x0D, buffer)
+        Buffer.addChar('\r', buffer)
       },
   }
 
@@ -1171,8 +1126,7 @@ let makePrettyPrintJSONWriter =
       indentationLevel => {
         let mut count = 0
         while (count < indentationLevel) {
-          //printer.writeChar('\t')
-          addCharFromCodePoint(0x09, buffer)
+          Buffer.addChar('\t', buffer)
           count += 1
         }
       },
@@ -1181,8 +1135,7 @@ let makePrettyPrintJSONWriter =
         let mut count = 0
         let spaceCount = indentationLevel * spacesPerIndentation
         while (count < spaceCount) {
-          //printer.writeChar(' ')
-          addCharFromCodePoint(0x20, buffer)
+          Buffer.addChar(' ', buffer)
           count += 1
         }
       },
@@ -1274,16 +1227,14 @@ let makePrettyPrintJSONWriter =
 
   let emitEscapedQuotedString = if (!format.escapeHTMLUnsafeSequences) {
     (s: String) => {
-      //printer.write("\"")
-      addCharFromCodePoint(0x22, buffer)
+      Buffer.addChar('"', buffer)
 
       // Note that it's important for performance that the closure passed to forEachCodePoint
       // is not allocated inline here, but just once when creating the writer.
 
       String.forEachCodePoint(emitCodePoint, s)
 
-      //printer.write("\"")
-      addCharFromCodePoint(0x22, buffer)
+      Buffer.addChar('"', buffer)
     }
   } else {
     // Special handling for the escapeHTMLUnsafeSequences flag.
@@ -1294,19 +1245,17 @@ let makePrettyPrintJSONWriter =
     // It could be possible to implement more optimally, but would
     // complicate things even more than this.
     (s: String) => {
-      addCharFromCodePoint(0x22, buffer)
+      Buffer.addChar('"', buffer)
 
       let mut prevCodePoint = 0
 
       String.forEachCodePoint(codePoint => {
         if (codePoint == 47) {
           if (format.escapeHTMLUnsafeSequences && prevCodePoint == 60) {
-            //printer.write("\\/")
-            addCharFromCodePoint(92, buffer)
-            addCharFromCodePoint(47, buffer)
+            Buffer.addChar('\\', buffer)
+            Buffer.addChar('/', buffer)
           } else {
             // otherwise just emit the slash as-is
-            //printer.writeChar('/')
             addCharFromCodePoint(codePoint, buffer)
           }
         } else {
@@ -1316,7 +1265,7 @@ let makePrettyPrintJSONWriter =
         prevCodePoint = codePoint
       }, s)
 
-      addCharFromCodePoint(0x22, buffer)
+      Buffer.addChar('"', buffer)
     }
   }
 
@@ -1679,47 +1628,47 @@ let rec parseValue = (parserImplHelper: JSONParserImplHelper) => {
 
             match (parserImplHelper.currentCodePoint) {
               0x22 => { // '"'
-                addCharFromCodePoint(0x22, buffer)
+                Buffer.addChar('"', buffer)
                 next(parserImplHelper)
                 void
               },
               0x5C => { // '\'
-                addCharFromCodePoint(0x5C, buffer)
+                Buffer.addChar('\\', buffer)
                 next(parserImplHelper)
                 void
               },
               0x2F => { // '/'
-                addCharFromCodePoint(0x2F, buffer)
+                Buffer.addChar('/', buffer)
                 next(parserImplHelper)
                 void
               },
               0x62 => { // letter 'b' as in Backspace
                 // emit backspace control code
-                addCharFromCodePoint(0x08, buffer)
+                Buffer.addChar('\u{08}', buffer)
                 next(parserImplHelper)
                 void
               },
               0x66 => { // letter 'f' as in Form Feed
                 // emit Form Feed control code
-                addCharFromCodePoint(0x0C, buffer)
+                Buffer.addChar('\u{0C}', buffer)
                 next(parserImplHelper)
                 void
               },
               0x6E => { // letter 'n' as in New line
                 // emit Line Feed control code
-                addCharFromCodePoint(0x0A, buffer)
+                Buffer.addChar('\u{0A}', buffer)
                 next(parserImplHelper)
                 void
               },
               0x72 => { // letter 'r' as in carriage Return
                 // emit Carriage Return control code
-                addCharFromCodePoint(0x0D, buffer)
+                Buffer.addChar('\u{0D}', buffer)
                 next(parserImplHelper)
                 void
               },
               0x74 => { // letter 't' as in Tab
                 // emit Tab control code
-                addCharFromCodePoint(0x09, buffer)
+                Buffer.addChar('\u{09}', buffer)
                 next(parserImplHelper)
                 void
               },
