@@ -1432,6 +1432,9 @@ export enum JSONParseError {
   InvalidUTF16SurrogatePair(String),
 }
 
+/**
+ * Internal data structure used during parsing.
+ */
 record JSONParserImplHelper {
   reader: StringReader.StringReader,
   bufferParse: Buffer.Buffer,

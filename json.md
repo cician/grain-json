@@ -475,6 +475,7 @@ Represents errors for JSON parsing along with a human readable text message.
 ```grain
 record JSONParserImplHelper {
   reader: StringReader.StringReader,
+  bufferParse: Buffer.Buffer,
   currentCodePoint: Number,
   pos: Number,
 }
